@@ -14,8 +14,6 @@ mod start32;
 static kernel_base : uint = - (1 << 30);
 
 extern "rust-intrinsic" {
-    //fn transmute<T, U>(x: T) -> U;
-
     fn offset<T>(dst: *T, offset: int) -> *T;
 }
 unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
@@ -30,9 +28,13 @@ fn range(lo: uint, hi: uint, it: |uint| -> ()) {
     }
 }
 
+trait Writer {
+	fn write(&mut self, string : &str);
+}
+
 struct Console {
 	buffer : *mut u16,
-	position : int,
+	position : uint,
 	width : uint,
 	height : uint,
 	color : u16
@@ -49,21 +51,35 @@ impl Console {
 		}
 	}
 
-	unsafe fn write(&mut self, string : &str) {
+	fn putchar(&mut self, position : uint, c : u16) {
+	}
+
+	fn write(&mut self, string : &str) {
 		range(0, string.len(), |i| {
 			let c = string[i] as u16;
-			*mut_offset(self.buffer, self.position) = self.color | c;
+			unsafe {
+				*mut_offset(self.buffer, self.position as int) = self.color | c;
+			}
 			self.position += 1;
+			if self.position > self.width * self.height {
+				// TODO scroll
+				self.position = 0;
+			}
 		});
+	}
+
+	fn clear(&mut self) {
+		range(0, 80*25, |i| { unsafe {
+			*mut_offset(self.buffer, i as int) = 0;
+		}});
+		self.position = 0;
 	}
 }
 
 #[no_mangle] #[no_split_stack]
 pub unsafe fn start64() {
-    range(0, 80*25, |i| {
-        *((kernel_base + 0xb8000 + i * 2) as *mut u16) = 0;
-    });
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
+	con.clear();
 	con.write("Hello World!");
 	loop {}
 }

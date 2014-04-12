@@ -11,12 +11,14 @@ OPT_LEVEL ?= 2
 
 all: rust_kernel rust_kernel.elf
 
+KERNEL_OBJS = start32.o main.o runtime.o rust-core/core.o
+
 rust_kernel: SHELL=/bin/bash
-rust_kernel: linker.ld start32.o main.o rust-core/core.o
+rust_kernel: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) -o $@ -Map $@.map -T $^
 	@echo $@: `stat -c%s $@` bytes
 	@echo $@: `grep fill $@.map | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
-rust_kernel.elf: linker.ld start32.o main.o rust-core/core.o
+rust_kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^
 clean::; rm -f rust_kernel main.o
 
