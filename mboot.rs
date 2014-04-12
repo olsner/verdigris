@@ -40,10 +40,10 @@ pub struct FBPixelFormat {
 }
 
 pub struct Info {
-    flags       : u32,
+    pub flags       : u32,
 // if flags[0]:
     mem_lower   : u32,
-    mem_upper   : u32,
+    pub mem_upper   : u32,
 // if flags[1]:
     boot_devices: u32,
 

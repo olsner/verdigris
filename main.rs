@@ -7,6 +7,7 @@
 extern crate core;
 
 use core::container::Container;
+use start32::MultiBootInfo;
 
 mod mboot;
 mod start32;
@@ -32,6 +33,10 @@ trait Writer {
 	fn write(&mut self, string : &str);
 }
 
+fn writeUInt<T : Writer>(out : &mut T, x : uint) {
+	out.write("<num>");
+}
+
 struct Console {
 	buffer : *mut u16,
 	position : uint,
@@ -54,6 +59,15 @@ impl Console {
 	fn putchar(&mut self, position : uint, c : u16) {
 	}
 
+	fn clear(&mut self) {
+		range(0, 80*25, |i| { unsafe {
+			*mut_offset(self.buffer, i as int) = 0;
+		}});
+		self.position = 0;
+	}
+}
+
+impl Writer for Console {
 	fn write(&mut self, string : &str) {
 		range(0, string.len(), |i| {
 			let c = string[i] as u16;
@@ -67,20 +81,14 @@ impl Console {
 			}
 		});
 	}
-
-	fn clear(&mut self) {
-		range(0, 80*25, |i| { unsafe {
-			*mut_offset(self.buffer, i as int) = 0;
-		}});
-		self.position = 0;
-	}
 }
 
 #[no_mangle] #[no_split_stack]
 pub unsafe fn start64() {
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
 	con.clear();
-	con.write("Hello World!");
+	con.write("Hello World! ");
+	writeUInt(&mut con, (*MultiBootInfo()).mem_upper as uint);
 	loop {}
 }
 

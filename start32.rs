@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod mboot;
+use mboot;
 
 extern {
     static mbi_pointer : u32;
