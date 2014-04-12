@@ -83,7 +83,7 @@ impl Writer for Console {
 	}
 }
 
-#[no_mangle] #[no_split_stack]
+#[no_mangle]
 pub unsafe fn start64() {
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
 	con.clear();
@@ -92,14 +92,14 @@ pub unsafe fn start64() {
 	loop {}
 }
 
-#[no_mangle] #[no_split_stack]
+#[no_mangle]
 pub unsafe fn abort() {
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
 	con.write("aborted.");
 	loop{} // asm!("cli; hlt")
 }
 
-#[no_mangle] #[no_split_stack]
+#[no_mangle]
 pub unsafe fn breakpoint() {
 	asm!("int3")
 }
