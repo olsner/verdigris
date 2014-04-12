@@ -39,16 +39,30 @@ pub struct FBPixelFormat {
     blue_mask   : u8,
 }
 
+pub enum InfoFlags {
+	MemorySize = 1,
+	MBI_FLAG_BOOTDEV = 2,
+	CommandLine = 4,
+	MBI_FLAG_MODULES = 8,
+	MBI_FLAGS_SYMS = 16 | 32,
+	MemoryMap = 64,
+	MBI_FLAG_DRIVES = 128,
+	MBI_FLAG_CFGTBL = 256,
+	MBI_FLAG_LOADER_NAME = 512,
+	MBI_FLAG_APM_TABLE = 1024,
+	MBI_FLAG_VBE = 2048
+}
+
 pub struct Info {
-    pub flags       : u32,
-// if flags[0]:
-    mem_lower   : u32,
+    pub flags   : u32,
+// if has(MemorySize)
+    pub mem_lower   : u32,
     pub mem_upper   : u32,
 // if flags[1]:
-    boot_devices: u32,
+    pub boot_devices: u32,
 
 // if (flags & MBI_FLAG_CMDLINE)
-    cmdline     : u32,
+    pub cmdline     : u32,
 
 // if (flags & MBI_FLAG_MODULES)
     mods_count  : u32,
@@ -60,7 +74,7 @@ pub struct Info {
     mmap_length : u32,
     mmap_addr   : u32,
 
-    drives_length   : u32,
+    drives_length: u32,
     drives_addr : u32,
 
     config_table: u32,
@@ -70,6 +84,12 @@ pub struct Info {
 
     vbe         : VBE,
     fb          : FB,
+}
+
+impl Info {
+	pub fn has(&self, flag : InfoFlags) -> bool {
+		self.flags & (flag as u32) != 0
+	}
 }
 
 pub struct Module {

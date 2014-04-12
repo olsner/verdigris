@@ -9,6 +9,9 @@ extern crate core;
 use core::cmp::min;
 use core::container::Container;
 use start32::MultiBootInfo;
+//use start32::OrigMultiBootInfo;
+use start32::PhysAddr;
+use start32::MutPhysAddr;
 
 mod mboot;
 mod start32;
@@ -43,6 +46,14 @@ trait Writer {
 		self.writeNumber(0, false, 10, false, x);
 	}
 
+	fn writeHex(&mut self, x : uint) {
+		self.writeNumber(0, false, 16, true, x);
+	}
+
+	fn writePtr<T>(&mut self, x : *T) {
+		self.writeNumber(16, true, 16, true, x as uint);
+	}
+
 	fn writeNumber(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint)
 	{
 		if show_base && base == 16 {
@@ -60,7 +71,7 @@ trait Writer {
 		}
 		if width > 0 {
 			let c = if leading_zero { '0' } else { ' ' };
-			range(0, min(len, width), |_| {
+			range(0, min(width - len, width), |_| {
 				self.putc(c);
 			});
 		}
@@ -146,6 +157,16 @@ impl Console {
 		self.position += self.width - (self.position % self.width);
 		self.clear_eol();
 	}
+
+	fn writeCStr(&mut self, c_str : *u8) {
+		unsafe {
+			let mut p = c_str;
+			while *p != 0 {
+				self.putc(*p as char);
+				p = offset(p, 1);
+			}
+		}
+	}
 }
 
 impl Writer for Console {
@@ -163,25 +184,62 @@ impl Writer for Console {
 	}
 }
 
+fn writeMBInfo(con : &mut Console, infop : *mboot::Info) {
+	con.write("Multiboot info at ");
+	con.writePtr(infop);
+	con.putc('\n');
+
+	let &info = unsafe { &*infop };
+	con.write("Flags: ");
+	con.writeHex(info.flags as uint);
+	con.newline();
+
+	if info.has(mboot::MemorySize) {
+		con.writeUInt(info.mem_lower as uint);
+		con.write("kB lower memory, ");
+		con.writeUInt(info.mem_upper as uint);
+		con.write("kB upper memory, ");
+		con.writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024) as uint);
+		con.write("MB total.\n");
+	}
+	// FIXME start32 doesn't copy this
+	if info.has(mboot::CommandLine) {
+		let cmdline : *u8 = PhysAddr(info.cmdline as uint);
+		con.write("Command line @");
+		con.writePtr(cmdline);
+		con.write(" (");
+		con.writeHex(info.cmdline as uint);
+		con.write(") \"");
+		con.writeCStr(cmdline);
+		con.write("\"\n");
+	}
+}
+
 #[no_mangle]
 pub unsafe fn start64() {
-	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
+	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
-	con.writeUInt((*MultiBootInfo()).mem_upper as uint);
-	let mut i = 0;
-	loop {
-		con.writeUInt(i);
-		con.putc('\n');
-		i += 1;
-	}
+	writeMBInfo(&mut con, MultiBootInfo());
+
+//	con.write("Original multiboot:\n");
+//	writeMBInfo(&mut con, OrigMultiBootInfo());
+
+
+//	let mut i = 0;
+//	loop {
+//		con.writeUInt(i);
+//		con.putc('\n');
+//		i += 1;
+//	}
+	asm!("cli; hlt");
 }
 
 #[no_mangle]
 pub unsafe fn abort() {
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
 	con.write("aborted.");
-	loop{} // asm!("cli; hlt")
+	asm!("cli; hlt");
 }
 
 #[no_mangle]
