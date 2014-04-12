@@ -1,4 +1,4 @@
-#![no_std]
+#![allow(dead_code)]
 
 pub struct VBE {
     control_info: u32,

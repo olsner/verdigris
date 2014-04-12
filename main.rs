@@ -1,6 +1,12 @@
 #![allow(ctypes)]
 #![no_std]
 #![no_main]
+#![feature(globs)]
+#![feature(asm)]
+
+extern crate core;
+
+use core::container::Container;
 
 mod mboot;
 mod start32;
@@ -43,8 +49,8 @@ impl Console {
 		}
 	}
 
-	unsafe fn write(&mut self, string : &str, len : uint /* FIXME */) {
-		range(0, len, |i| {
+	unsafe fn write(&mut self, string : &str) {
+		range(0, string.len(), |i| {
 			let c = string[i] as u16;
 			*mut_offset(self.buffer, self.position) = self.color | c;
 			self.position += 1;
@@ -58,13 +64,18 @@ pub unsafe fn start64() {
         *((kernel_base + 0xb8000 + i * 2) as *mut u16) = 0;
     });
 	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
-	con.write("Hello World!", 12);
+	con.write("Hello World!");
 	loop {}
 }
 
-#[inline]
-#[lang="fail_bounds_check"]
-#[no_split_stack]
-pub fn fail_bounds_check(_: *u8, _: uint, _: uint, _: uint) -> ! {
-    loop {}
+#[no_mangle] #[no_split_stack]
+pub unsafe fn abort() {
+	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
+	con.write("aborted.");
+	loop{} // asm!("cli; hlt")
+}
+
+#[no_mangle] #[no_split_stack]
+pub unsafe fn breakpoint() {
+	asm!("int3")
 }

@@ -1,6 +1,5 @@
-#![no_std]
+#![allow(dead_code)]
 
-//extern crate mboot;
 mod mboot;
 
 extern {
