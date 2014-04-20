@@ -22,7 +22,7 @@ all: rust_kernel rust_kernel.elf
 clean:
 	rm -fr $(OUTFILES)
 
-KERNEL_OBJS = runtime.o
+KERNEL_OBJS = runtime.o start32.o
 KERNEL_OBJS += amalgam.o
 
 OUTFILES += $(KERNEL_OBJS)
