@@ -12,11 +12,14 @@ use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
 use start32::MutPhysAddr;
+use x86::idt;
 
 mod mboot;
 mod start32;
+mod x86;
 
 static kernel_base : uint = - (1 << 30);
+static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
 
 extern "rust-intrinsic" {
     fn offset<T>(dst: *T, offset: int) -> *T;
@@ -215,12 +218,27 @@ fn writeMBInfo(con : &mut Console, infop : *mboot::Info) {
 	}
 }
 
+pub fn generic_irq_handler(vec : u8) {
+}
+
+pub fn page_fault(error : u64) {
+}
+
 #[no_mangle]
 pub unsafe fn start64() {
 	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
 	writeMBInfo(&mut con, MultiBootInfo());
+
+	let gdtr = start32::Gdtr();
+	con.writePtr(gdtr.limit as *u8);
+	con.writePtr(gdtr.base as *u8);
+	x86::lgdt(start32::Gdtr());
+
+	let handlers = [(14, idt::Error(page_fault))];
+	idt::build(&mut idt_table, handlers, generic_irq_handler);
+	idt::load(&idt_table);
 
 //	con.write("Original multiboot:\n");
 //	writeMBInfo(&mut con, OrigMultiBootInfo());
