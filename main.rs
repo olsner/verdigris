@@ -229,20 +229,12 @@ pub unsafe fn start64() {
 	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
-	writeMBInfo(&mut con, MultiBootInfo());
 
-	let gdtr = start32::Gdtr();
-	con.writePtr(gdtr.limit as *u8);
-	con.writePtr(gdtr.base as *u8);
 	x86::lgdt(start32::Gdtr());
 
 	let handlers = [(14, idt::Error(page_fault))];
 	idt::build(&mut idt_table, handlers, generic_irq_handler);
 	idt::load(&idt_table);
-
-//	con.write("Original multiboot:\n");
-//	writeMBInfo(&mut con, OrigMultiBootInfo());
-
 
 //	let mut i = 0;
 //	loop {
