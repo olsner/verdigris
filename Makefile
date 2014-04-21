@@ -14,8 +14,8 @@ CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
-OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64 -internalize
-RUSTCFLAGS = --opt-level=$(OPT_LEVEL) --target $(TARGET)
+OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64 -internalize -reroll-loops
+RUSTCFLAGS = --opt-level=$(OPT_LEVEL) --target $(TARGET) --dep-info
 
 all: rust_kernel rust_kernel.elf
 
@@ -44,7 +44,7 @@ OUTFILES += rust_kernel rust_kernel.elf rust_kernel.map
 main.bc: main.rs rust-core/crate.stamp Makefile
 	$(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -Lrust-core -o $@ $<
 
-main.bc: mboot.rs start32.rs x86.rs mem.rs con.rs
+-include main.d
 
 amalgam.bc: main.bc rust-core/core.bc
 	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
