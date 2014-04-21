@@ -22,11 +22,14 @@ all: rust_kernel rust_kernel.elf
 clean:
 	rm -fr $(OUTFILES)
 
-KERNEL_OBJS = runtime.o start32.o
+KERNEL_OBJS = runtime.o
 KERNEL_OBJS += amalgam.o
 
+OUTFILES :=
 OUTFILES += $(KERNEL_OBJS)
 OUTFILES += main.o rest-core/core.o
+
+KERNEL_OBJS += start32.o
 
 rust_kernel: SHELL=/bin/bash
 rust_kernel: linker.ld $(KERNEL_OBJS)
