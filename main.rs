@@ -19,6 +19,7 @@ use x86::idt;
 
 mod con;
 mod mboot;
+mod mem;
 mod start32;
 mod x86;
 
@@ -62,8 +63,12 @@ pub fn generic_irq_handler(vec : u8) {
 pub fn page_fault(error : u64) {
 }
 
+pub fn idle() -> ! {
+	loop { unsafe { asm!("hlt"); } }
+}
+
 #[no_mangle]
-pub unsafe fn start64() {
+pub unsafe fn start64() -> ! {
 	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
@@ -74,13 +79,21 @@ pub unsafe fn start64() {
 	idt::build(&mut idt_table, handlers, generic_irq_handler);
 	idt::load(&idt_table);
 
+	let mut memory = mem::Global::new();
+	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint, &mut con);
+	con.write("Memory initialized. Free: ");
+	con.writeUInt(memory.free_pages() * 4);
+	con.write("KiB, Used: ");
+	con.writeUInt(memory.used_pages() * 4);
+	con.write("KiB\n");
+
 //	let mut i = 0;
 //	loop {
 //		con.writeUInt(i);
 //		con.putc('\n');
 //		i += 1;
 //	}
-	asm!("cli; hlt");
+	idle();
 }
 
 #[no_mangle]

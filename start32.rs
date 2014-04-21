@@ -5,6 +5,7 @@ use x86;
 
 extern {
     static mbi_pointer : u32;
+	pub static memory_start : u32;
 	//static orig_mbi_pointer : u32;
 	static gdtr : x86::Gdtr;
 }
@@ -30,3 +31,7 @@ pub fn Gdtr() -> &'static x86::Gdtr {
 //pub fn OrigMultiBootInfo() -> *mboot::Info {
 //	PhysAddr(orig_mbi_pointer as uint)
 //}
+
+// TOOD: Remove hardcoded lower-half mappings from start32.o
+pub fn CleanPageMappings() {
+}

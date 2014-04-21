@@ -43,7 +43,7 @@ pub enum InfoFlags {
 	MemorySize = 1,
 	MBI_FLAG_BOOTDEV = 2,
 	CommandLine = 4,
-	MBI_FLAG_MODULES = 8,
+	Modules = 8,
 	MBI_FLAGS_SYMS = 16 | 32,
 	MemoryMap = 64,
 	MBI_FLAG_DRIVES = 128,
@@ -61,18 +61,19 @@ pub struct Info {
 // if flags[1]:
     pub boot_devices: u32,
 
-// if (flags & MBI_FLAG_CMDLINE)
+// if has(CommandLine)
     pub cmdline     : u32,
 
-// if (flags & MBI_FLAG_MODULES)
+// if has(Modules)
     mods_count  : u32,
     mods_addr   : u32,
 
+// 
     syms        : [u32, ..4],
 
-// if (flags & MBI_FLAG_MMAP)
-    mmap_length : u32,
-    mmap_addr   : u32,
+// if has(MMap)
+    pub mmap_length : u32,
+    pub mmap_addr   : u32,
 
     drives_length: u32,
     drives_addr : u32,
@@ -99,3 +100,19 @@ pub struct Module {
     res    : u32,
 }
 
+#[packed]
+pub struct MemoryMapItem {
+    // Size of item (bytes), *not* including the item_size field
+    pub item_size   : u32,
+    pub start       : u64,
+    pub length      : u64,
+    // See values from MemoryTypes
+    pub item_type   : u32,
+}
+
+pub enum MemoryTypes {
+    MemoryTypeMemory = 1,
+    MemoryTypeReserved = 2,
+    MemoryTypeACPIRCL = 3,
+    MemoryTypeACPISomething = 4,
+}
