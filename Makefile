@@ -15,7 +15,7 @@ LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64 -internalize -reroll-loops
-RUSTCFLAGS = --opt-level=$(OPT_LEVEL) --target $(TARGET) --dep-info
+RUSTCFLAGS = --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
 all: rust_kernel rust_kernel.elf
 
@@ -31,6 +31,9 @@ OUTFILES += main.o rest-core/core.o
 
 KERNEL_OBJS += start32.o
 
+CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core --crate-file-name)
+
+
 rust_kernel: SHELL=/bin/bash
 rust_kernel: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) -o $@ -Map $@.map -T $^
@@ -41,7 +44,7 @@ rust_kernel.elf: linker.ld $(KERNEL_OBJS)
 
 OUTFILES += rust_kernel rust_kernel.elf rust_kernel.map
 
-main.bc: main.rs rust-core/crate.stamp Makefile
+main.bc: main.rs rust-core/$(CORE_CRATE) Makefile
 	$(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -Lrust-core -o $@ $<
 
 -include main.d
@@ -65,10 +68,12 @@ OUTFILES += amalgam.o main.o rust-core/core.o
 	$(LLVM_DIS) $<
 
 rust-core/core.bc:
-	cd rust-core && $(RUSTC) $(RUSTCFLAGS) --emit=bc core/lib.rs --out-dir . -Z no-landing-pads
+	$(RUSTC) $(RUSTCFLAGS) --emit=bc rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
 
-rust-core/crate.stamp: rust-core/libcore-caef0f5f-0.0.rlib
-	touch $@ --reference=$<
+rust-core/$(CORE_CRATE): RUSTC_DEP_OUT = rust-core/crate.d
+rust-core/$(CORE_CRATE):
+	$(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
 
-rust-core/libcore-caef0f5f-0.0.rlib:
-	cd rust-core && $(RUSTC) $(RUSTCFLAGS) core/lib.rs --out-dir . -Z no-landing-pads
+-include rust-core/core.d
+-include rust-core/crate.d
+
