@@ -44,7 +44,7 @@ OUTFILES += rust_kernel rust_kernel.elf rust_kernel.map
 main.bc: main.rs rust-core/crate.stamp Makefile
 	$(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -Lrust-core -o $@ $<
 
-main.bc: mboot.rs start32.rs x86.rs
+main.bc: mboot.rs start32.rs x86.rs con.rs
 
 amalgam.bc: main.bc rust-core/core.bc
 	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
