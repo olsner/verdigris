@@ -8,6 +8,7 @@ extern crate core;
 
 use con::Console;
 use con::Writer;
+use con::con;
 use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
@@ -23,7 +24,8 @@ mod x86;
 
 static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
 
-fn writeMBInfo(con : &mut Console, infop : *mboot::Info) {
+fn writeMBInfo(infop : *mboot::Info) {
+	let &mut con = con::get();
 	con.write("Multiboot info at ");
 	con.writePtr(infop);
 	con.putc('\n');
@@ -81,7 +83,7 @@ impl PerCpu {
 
 #[no_mangle]
 pub unsafe fn start64() -> ! {
-	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
+	con::init(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
 
@@ -92,15 +94,13 @@ pub unsafe fn start64() -> ! {
 	idt::load(&idt_table);
 
 	let &mut memory = &mut mem::global;
-	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint, &mut con);
-	con.write("Memory initialized. Free: ");
-	con.writeUInt(memory.free_pages() * 4);
-	con.write("KiB, Used: ");
-	con.writeUInt(memory.used_pages() * 4);
-	con.write("KiB\n");
+	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint);
+	con.write("Memory initialized. ");
+	memory.stat();
 
 	let mut cpu = PerCpu::new();
-	cpu.memory.test(&mut con);
+	cpu.memory.test();
+	memory.stat();
 
 //	let mut i = 0;
 //	loop {

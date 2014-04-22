@@ -87,12 +87,22 @@ pub trait Writer {
 	}
 }
 
+pub static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, width : 0, height : 0, color : 0 };
+
 pub struct Console {
 	buffer : *mut u16,
 	position : uint,
 	width : uint,
 	height : uint,
 	color : u16
+}
+
+pub fn init(buffer : *mut u16, width : uint, height : uint) {
+	unsafe { con = Console::new(buffer, width, height); }
+}
+
+pub fn get() -> &'static mut Console {
+	unsafe { &mut con }
 }
 
 impl Console {

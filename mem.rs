@@ -5,6 +5,7 @@ use core::ptr::offset;
 
 use con::Console;
 use con::Writer;
+use con;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
@@ -87,12 +88,20 @@ fn pop_frame(head : &mut FreeFrameP) -> FreeFrameP {
 	}
 }
 
+fn from_option<T>(x : Option<T>, def : T) -> T {
+	match x {
+		Some(val) => val,
+		None => def
+	}
+}
+
 impl Global {
-	pub fn init(&mut self, info : &mboot::Info, min_addr : uint, con : &mut Console) {
+	pub fn init(&mut self, info : &mboot::Info, min_addr : uint) {
 		if !info.has(mboot::MemoryMap) {
 			return;
 		}
 
+		let &mut con = con::get();
 		let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
 		let mut count = 0;
 		for item in mmap {
@@ -121,9 +130,13 @@ impl Global {
 
 	pub fn alloc_frame(&mut self) -> FreeFrameP {
 		match pop_frame(&mut self.free) {
-			Some(page) => Some(page),
+			Some(page) => {
+				self.num_used += 1;
+				Some(page)
+			},
 			None => match pop_frame(&mut self.garbage) {
 				Some(page) => {
+					self.num_used += 1;
 					clear(page);
 					Some(page)
 				},
@@ -145,6 +158,15 @@ impl Global {
 
 	pub fn used_pages(&self) -> uint {
 		self.num_used
+	}
+
+	pub fn stat(&self) {
+		let &mut con = con::get();
+		con.write("Free: ");
+		con.writeUInt(self.free_pages() * 4);
+		con.write("KiB, Used: ");
+		con.writeUInt(self.used_pages() * 4);
+		con.write("KiB\n");
 	}
 }
 
@@ -187,11 +209,18 @@ impl PerCpu {
 		get().free_frame(page);
 	}
 
-	pub fn test(&mut self, con : &mut Console) {
+	pub fn test(&mut self) {
 		let mut head = None;
 		let mut count = 0;
+		let &mut con = con::get();
 		loop {
 			let p = self.alloc_frame();
+			con.write("Allocation #");
+			con.writeUInt(count);
+			con.write(": ");
+			con.writePtr(from_option(p, 0 as *mut u8) as *u8);
+			con.newline();
+			get().stat();
 			match p {
 				Some(pp) => {
 					push_frame(&mut head, pp);
@@ -203,6 +232,7 @@ impl PerCpu {
 		con.write("Allocated everything: ");
 		con.writeUInt(count);
 		con.write(" pages\n");
+		get().stat();
 		loop {
 			match head {
 				Some(p) => self.free_frame(p as *u8),
