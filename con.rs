@@ -14,6 +14,10 @@ fn range(lo: uint, hi: uint, it: |uint| -> ()) {
     }
 }
 
+pub fn debugc(c : char) {
+	unsafe { asm!("outb $0,$$0xe9": :"R"(c as u8) : :"volatile"); }
+}
+
 pub trait Writer {
 	fn putc(&mut self, c : char);
 
@@ -116,7 +120,7 @@ impl Console {
 		}
 	}
 
-	fn putchar(&mut self, position : uint, c : u16) {
+	pub fn putchar(&mut self, position : uint, c : u16) {
 		unsafe {
 			*mut_offset(self.buffer, position as int) = c;
 		}
@@ -154,8 +158,9 @@ impl Console {
 		self.position -= dist;
 	}
 
+	#[cfg(not(no_console))]
 	pub fn newline(&mut self) {
-		self.debugc('\n');
+		debugc('\n');
 		if self.position > self.width * (self.height - 1) {
 			self.scroll(1);
 		}
@@ -163,11 +168,20 @@ impl Console {
 		self.clear_eol();
 	}
 
-	fn debugc(&self, c : char) {
-		unsafe { asm!("outb $0,$$0xe9": :"R"(c as u8) : :"volatile"); }
+	#[inline(always)]
+	#[cfg(no_console)]
+	pub fn newline(&mut self) {
 	}
 }
 
+#[cfg(no_console)]
+impl Writer for Console {
+	#[inline(always)]
+	fn putc(&mut self, c : char) {
+	}
+}
+
+#[cfg(not(no_console))]
 impl Writer for Console {
 	#[inline(never)]
 	fn putc(&mut self, c : char) {
@@ -175,7 +189,7 @@ impl Writer for Console {
 			self.newline();
 			return;
 		}
-		self.debugc(c);
+		debugc(c);
 		let value = (c as u8) as u16 | self.color;
 		self.putchar(self.position, value);
 		self.position += 1;

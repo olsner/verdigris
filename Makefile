@@ -45,6 +45,10 @@ rust_kernel.elf: linker.ld $(KERNEL_OBJS)
 
 OUTFILES += rust_kernel rust_kernel.elf rust_kernel.map
 
+ifdef CFG
+main.bc: RUSTCFLAGS += --cfg $(CFG)
+endif
+
 main.bc: main.rs rust-core/$(CORE_CRATE) Makefile
 	$(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -Lrust-core -o $@ $<
 
