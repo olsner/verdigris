@@ -1,17 +1,11 @@
 use core::cmp::min;
 use core::container::Container;
 use core::ptr::offset;
+use core::option::*;
+use core::iter::*;
 
 unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
 	offset(dst as *T, off) as *mut T
-}
-
-fn range(lo: uint, hi: uint, it: |uint| -> ()) {
-    let mut iter = lo;
-    while iter < hi {
-        it(iter);
-        iter += 1;
-    }
 }
 
 pub fn debugc(c : char) {
@@ -22,9 +16,9 @@ pub trait Writer {
 	fn putc(&mut self, c : char);
 
 	fn write(&mut self, string : &str) {
-		range(0, string.len(), |i| {
+		for i in range(0, string.len()) {
 			self.putc(string[i] as char);
-		});
+		}
 	}
 
 	fn writeUInt(&mut self, x : uint) {
@@ -59,9 +53,9 @@ pub trait Writer {
 		}
 		if width > 0 {
 			let c = if leading_zero { '0' } else { ' ' };
-			range(0, min(width - len, width), |_| {
+			for _ in range(0, min(width - len, width)) {
 				self.putc(c);
-			});
+			}
 		}
 		while len > 0 {
 			len -= 1;
@@ -127,25 +121,25 @@ impl Console {
 	}
 
 	pub fn clear(&mut self) {
-		range(0, 80*25, |i| { unsafe {
-			*mut_offset(self.buffer, i as int) = 0;
-		}});
+		for i in range(0, 80*25 as uint) {
+			self.putchar(i, 0);
+		}
 		self.position = 0;
 	}
 
 	fn clear_eol(&mut self) {
-		range(0, self.width - (self.position % self.width), |i| {
+		for i in range(0, self.width - (self.position % self.width)) {
 			self.putchar(self.position + i, 0);
-		});
+		}
 	}
 
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
-		range(0, n, |i| {
+		for i in range(0, n) {
 			unsafe {
 				*mut_offset(self.buffer, (to + i) as int) =
 					*mut_offset(self.buffer, (from + i) as int);
 			}
-		});
+		}
 	}
 
 	fn scroll(&mut self, lines : uint) {
