@@ -8,14 +8,15 @@ OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
 
 TARGET = x86_64-pc-linux-elf
-CFLAGS = -std=c99 -fomit-frame-pointer $(COPTFLAGS)
+CFLAGS = -g -std=c99 -fomit-frame-pointer $(COPTFLAGS)
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone
+CFLAGS += -no-integrated-as
 #CFLAGS += -Wa,--no-target-align
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64 -internalize -reroll-loops
-RUSTCFLAGS = --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
+RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
 all: rust_kernel rust_kernel.elf
 
