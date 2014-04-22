@@ -8,16 +8,21 @@ use con::Writer;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
+use util::abort;
+
+extern {
+fn memset(dst : *mut u8, v : u8, count : uint);
+}
 
 struct FreeFrame {
-	next : Option<*FreeFrame>
+	next : FreeFrameP
 }
-type FreeFrameP = Option<*FreeFrame>;
+type FreeFrameP = Option<*mut FreeFrame>;
 
 fn make_free_frame<T>(p : *T, next : FreeFrameP) -> FreeFrameP {
 	let free = p as *mut FreeFrame;
 	unsafe { (*free).next = next; }
-	return Some(free as *FreeFrame);
+	return Some(free);
 }
 
 pub struct Global {
@@ -29,8 +34,11 @@ pub struct Global {
 	num_total : uint,
 }
 
+pub static empty_global : Global = Global { garbage : None, free : None, num_used : 0, num_total : 0 };
+pub static mut global : Global = empty_global;
+
 pub struct PerCpu {
-	free : *FreeFrame
+	free : FreeFrameP
 }
 
 struct MemoryMap {
@@ -56,11 +64,30 @@ impl Iterator<MemoryMapItem> for MemoryMap {
 	}
 }
 
-impl Global {
-	pub fn new() -> Global {
-		return Global { garbage : None, free : None, num_used : 0, num_total : 0 };
-	}
+fn push_frame<T>(head : &mut FreeFrameP, frame : *mut T) {
+	let free = frame as *mut FreeFrame;
+	unsafe { (*free).next = *head; }
+	*head = Some(free);
+}
 
+fn clear(page : *mut FreeFrame) {
+	unsafe { memset(page as *mut u8, 0, 4096); }
+}
+
+fn pop_frame(head : &mut FreeFrameP) -> FreeFrameP {
+	match *head {
+		Some(page) => {
+			unsafe {
+				*head = (*page).next;
+				(*page).next = None;
+			}
+			Some(page)
+		},
+		None => None
+	}
+}
+
+impl Global {
 	pub fn init(&mut self, info : &mboot::Info, min_addr : uint, con : &mut Console) {
 		if !info.has(mboot::MemoryMap) {
 			return;
@@ -89,7 +116,27 @@ impl Global {
 
 	pub fn free_frame(&mut self, vpaddr : *u8) {
 		self.num_used -= 1;
-		self.garbage = make_free_frame(vpaddr, self.garbage);
+		push_frame(&mut self.garbage, vpaddr as *mut FreeFrame);
+	}
+
+	pub fn alloc_frame(&mut self) -> FreeFrameP {
+		match pop_frame(&mut self.free) {
+			Some(page) => Some(page),
+			None => match pop_frame(&mut self.garbage) {
+				Some(page) => {
+					clear(page);
+					Some(page)
+				},
+				None => { None }
+			}
+		}
+	}
+
+	pub fn alloc_frame_panic(&mut self) -> *mut FreeFrame {
+		match self.alloc_frame() {
+			Some(page) => page,
+			None => abort()
+		}
 	}
 
 	pub fn free_pages(&self) -> uint {
@@ -98,5 +145,69 @@ impl Global {
 
 	pub fn used_pages(&self) -> uint {
 		self.num_used
+	}
+}
+
+pub fn get() -> &'static mut Global {
+	unsafe { &mut global }
+}
+
+impl PerCpu {
+	pub fn new() -> PerCpu {
+		PerCpu { free : None }
+	}
+
+	pub fn alloc_frame(&mut self) -> Option<*mut u8> {
+		match pop_frame(&mut self.free) {
+			Some(page) => { return Some(page as *mut u8); }
+			None => {}
+		}
+		self.steal_frame(); self.steal_frame();
+		match pop_frame(&mut self.free) {
+			Some(page) => Some(page as *mut u8),
+			None => None
+		}
+	}
+
+	pub fn steal_frame(&mut self) {
+		match get().alloc_frame() {
+			Some(page) => push_frame(&mut self.free, page),
+			None => ()
+		}
+	}
+
+	pub fn alloc_frame_panic(&mut self) -> *mut u8 {
+		match self.alloc_frame() {
+			Some(page) => page,
+			None => abort()
+		}
+	}
+
+	pub fn free_frame(&mut self, page : *u8) {
+		get().free_frame(page);
+	}
+
+	pub fn test(&mut self, con : &mut Console) {
+		let mut head = None;
+		let mut count = 0;
+		loop {
+			let p = self.alloc_frame();
+			match p {
+				Some(pp) => {
+					push_frame(&mut head, pp);
+					count += 1;
+				}
+				None => break
+			}
+		}
+		con.write("Allocated everything: ");
+		con.writeUInt(count);
+		con.write(" pages\n");
+		loop {
+			match head {
+				Some(p) => self.free_frame(p as *u8),
+				None => break
+			}
+		}
 	}
 }

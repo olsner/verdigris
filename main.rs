@@ -6,9 +6,6 @@
 
 extern crate core;
 
-use core::cmp::min;
-use core::container::Container;
-
 use con::Console;
 use con::Writer;
 use start32::MultiBootInfo;
@@ -21,9 +18,9 @@ mod con;
 mod mboot;
 mod mem;
 mod start32;
+mod util;
 mod x86;
 
-static kernel_base : uint = - (1 << 30);
 static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
 
 fn writeMBInfo(con : &mut Console, infop : *mboot::Info) {
@@ -67,6 +64,21 @@ pub fn idle() -> ! {
 	loop { unsafe { asm!("hlt"); } }
 }
 
+struct PerCpu {
+	memory : mem::PerCpu,
+}
+
+impl PerCpu {
+	fn new() -> PerCpu {
+		PerCpu { memory : mem::PerCpu::new() }
+	}
+
+	fn run(&mut self) -> ! {
+		// TODO: Pop something from run queue, run it
+		idle();
+	}
+}
+
 #[no_mangle]
 pub unsafe fn start64() -> ! {
 	let mut con = Console::new(MutPhysAddr(0xb8000), 80, 25);
@@ -79,13 +91,16 @@ pub unsafe fn start64() -> ! {
 	idt::build(&mut idt_table, handlers, generic_irq_handler);
 	idt::load(&idt_table);
 
-	let mut memory = mem::Global::new();
+	let &mut memory = &mut mem::global;
 	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint, &mut con);
 	con.write("Memory initialized. Free: ");
 	con.writeUInt(memory.free_pages() * 4);
 	con.write("KiB, Used: ");
 	con.writeUInt(memory.used_pages() * 4);
 	con.write("KiB\n");
+
+	let mut cpu = PerCpu::new();
+	cpu.memory.test(&mut con);
 
 //	let mut i = 0;
 //	loop {
@@ -94,16 +109,4 @@ pub unsafe fn start64() -> ! {
 //		i += 1;
 //	}
 	idle();
-}
-
-#[no_mangle]
-pub unsafe fn abort() {
-	let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
-	con.write("aborted.");
-	asm!("cli; hlt");
-}
-
-#[no_mangle]
-pub unsafe fn breakpoint() {
-	asm!("int3")
 }

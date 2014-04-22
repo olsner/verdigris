@@ -10,7 +10,7 @@ extern {
 	static gdtr : x86::Gdtr;
 }
 
-static kernel_base : uint = - (1 << 30);
+pub static kernel_base : uint = - (1 << 30);
 
 pub fn MutPhysAddr<T>(addr : uint) -> *mut T {
 	(addr + kernel_base) as *mut T
