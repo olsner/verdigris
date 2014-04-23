@@ -6,12 +6,11 @@ LLVM = -3.5
 LLVM_LINK = llvm-link$(LLVM)
 OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
+AS = clang -c
 
 TARGET = x86_64-pc-linux-elf
 CFLAGS = -g -std=c99 -fomit-frame-pointer $(COPTFLAGS)
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone
-CFLAGS += -no-integrated-as
-#CFLAGS += -Wa,--no-target-align
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
@@ -69,8 +68,13 @@ OUTFILES += amalgam.o main.o rust-core/core.o
 # Hack to remove 16-byte alignment for every function.
 	sed -i 's/.align\s\+16/.align 1/g' $@
 
+# Keep it around after building the .o file
+.PRECIOUS: amalgam.s
+
 %.ll: %.bc
 	$(LLVM_DIS) $<
+
+all: amalgam.ll
 
 rust-core/core.bc:
 	$(RUSTC) $(RUSTCFLAGS) --emit=bc rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
