@@ -6,6 +6,9 @@
 
 extern crate core;
 
+use core::iter::*;
+use core::option::*;
+
 use con::Console;
 use con::Writer;
 use con::con;
@@ -86,6 +89,10 @@ pub unsafe fn start64() -> ! {
 	con::init(MutPhysAddr(0xb8000), 80, 25);
 	con.clear();
 	con.write("Hello World!\n");
+	for i in range(0,35) {
+		con.writeUInt(i as uint);
+		con.newline();
+	}
 
 	x86::lgdt(start32::Gdtr());
 
