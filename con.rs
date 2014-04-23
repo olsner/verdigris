@@ -8,12 +8,22 @@ unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
 	offset(dst as *T, off) as *mut T
 }
 
+// NOTE: memcpy is assumed to copy from the beginning (and will be used on
+// overlapping ranges)
+extern {
+	fn memcpy(dst : *mut u8, src : *u8, count : uint);
+}
+
 pub fn debugc(c : char) {
 	unsafe { asm!("outb %al,$$0xe9": :"{al}"(c as u8) :: "volatile"); }
 }
 
 pub trait Writer {
 	fn putc(&mut self, c : char);
+
+	fn newline(&mut self) {
+		self.putc('\n');
+	}
 
 	fn write(&mut self, string : &str) {
 		for i in range(0, string.len()) {
@@ -128,43 +138,35 @@ impl Console {
 	}
 
 	fn clear_eol(&mut self) {
-		for i in range(0, self.width - (self.position % self.width)) {
-			self.putchar(self.position + i, 0);
+		let count = self.width - (self.position % self.width);
+		self.clear_range(self.position, count);
+		self.position += count;
+	}
+
+	pub fn clear_range(&mut self, start : uint, length : uint) {
+		for i in range(start, start + length) {
+			self.putchar(i, self.color);
 		}
 	}
 
+	#[inline(never)]
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
-		for i in range(0, n) {
-			unsafe {
-				*mut_offset(self.buffer, (to + i) as int) =
-					*mut_offset(self.buffer, (from + i) as int);
-			}
+		unsafe {
+			let b = self.buffer as *mut u8;
+			let dst = mut_offset(b, 2 * to as int);
+			let src = offset(b as *u8, 2 * from as int);
+			memcpy(dst, src, 2 * n);
 		}
 	}
 
-	fn scroll(&mut self, lines : uint) {
-		if lines >= self.height {
-			self.clear();
-			return;
-		}
-		let dist = self.width * lines;
-		self.copy_back(0, dist, self.width * self.height - dist);
-		self.position -= dist;
-	}
-
-	#[cfg(not(no_console))]
-	pub fn newline(&mut self) {
-		debugc('\n');
-		if self.position > self.width * (self.height - 1) {
-			self.scroll(1);
-		}
-		self.position += self.width - (self.position % self.width);
-		self.clear_eol();
-	}
-
-	#[inline(always)]
-	#[cfg(no_console)]
-	pub fn newline(&mut self) {
+	#[inline(never)]
+	fn scroll(&mut self) {
+		debugc('S');
+		let dist = self.width;
+		let count = self.width * (self.height - 1);
+		self.copy_back(0, dist, count);
+		self.clear_range(count, dist);
+		self.position = count;
 	}
 }
 
@@ -172,6 +174,7 @@ impl Console {
 impl Writer for Console {
 	#[inline(always)]
 	fn putc(&mut self, c : char) {
+		debugc(c);
 	}
 }
 
@@ -179,17 +182,16 @@ impl Writer for Console {
 impl Writer for Console {
 	#[inline(never)]
 	fn putc(&mut self, c : char) {
-		if c == '\n' {
-			self.newline();
-			return;
-		}
 		debugc(c);
-		let value = (c as u8) as u16 | self.color;
-		self.putchar(self.position, value);
-		self.position += 1;
-		if self.position == self.width * self.height {
-			self.scroll(1);
+		if c == '\n' {
+			self.clear_eol();
+		} else {
+			let value = (c as u8) as u16 | self.color;
+			self.putchar(self.position, value);
+			self.position += 1;
+		}
+		if self.position >= self.width * self.height {
+			self.scroll();
 		}
 	}
 }
-
