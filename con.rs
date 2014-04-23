@@ -9,7 +9,7 @@ unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
 }
 
 pub fn debugc(c : char) {
-	unsafe { asm!("outb $0,$$0xe9": :"R"(c as u8) : :"volatile"); }
+	unsafe { asm!("outb %al,$$0xe9": :"{al}"(c as u8) :: "volatile"); }
 }
 
 pub trait Writer {
