@@ -12,6 +12,7 @@ use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
+use start32::MutPhysAddr;
 use util::abort;
 
 extern {
@@ -116,7 +117,7 @@ impl Global {
 			newline();
 			for p in range_step(item.start, item.start + item.length, 4096) {
 				if (p as uint > min_addr) {
-					self.free_frame(PhysAddr(p as uint));
+					self.free_frame(MutPhysAddr(p as uint));
 					count += 1;
 				}
 			}
@@ -125,7 +126,7 @@ impl Global {
 		self.num_total = count;
 	}
 
-	pub fn free_frame(&mut self, vpaddr : *u8) {
+	pub fn free_frame(&mut self, vpaddr : *mut u8) {
 		self.num_used -= 1;
 		push_frame(&mut self.garbage, vpaddr as *mut FreeFrame);
 	}
@@ -205,7 +206,7 @@ impl PerCpu {
 		}
 	}
 
-	pub fn free_frame(&mut self, page : *u8) {
+	pub fn free_frame(&mut self, page : *mut u8) {
 		get().free_frame(page);
 	}
 
@@ -238,7 +239,7 @@ impl PerCpu {
 //			newline();
 //			get().stat();
 			match pop_frame(&mut head) {
-				Some(p) => self.free_frame(p as *u8),
+				Some(p) => self.free_frame(p as *mut u8),
 				None => break
 			}
 			count -= 1;

@@ -69,18 +69,44 @@ pub fn idle() -> ! {
 }
 
 struct PerCpu {
+	selfp : *mut PerCpu,
 	memory : mem::PerCpu,
 }
 
 impl PerCpu {
+	// TODO Always do a heap allocation so we can populate selfp with a proper
+	// value
 	fn new() -> PerCpu {
-		PerCpu { memory : mem::PerCpu::new() }
+		PerCpu { selfp : 0 as *mut PerCpu, memory : mem::PerCpu::new() }
 	}
 
 	fn run(&mut self) -> ! {
 		// TODO: Pop something from run queue, run it
 		idle();
 	}
+}
+
+// NB: One of the funky guarantees that Rust gives/requires is that there is
+// at most one &mut reference to the same thing at any one time. This function
+// can't quite guarantee that...
+// This function also returns garbage as long as PerCpu::new doesn't fill in
+// the selfp pointer.
+pub fn cpu() -> &mut PerCpu {
+	unsafe {
+		let mut ret = 0;
+		asm!("movq gs:($0), $0" : "=r"(ret) : "0"(ret));
+		return &mut *(ret as *mut PerCpu);
+	}
+}
+
+#[lang="exchange_malloc"]
+pub fn malloc(size : uint) -> *mut u8 {
+	return cpu().memory.alloc_frame_panic();
+}
+
+#[lang="exchange_free"]
+pub fn free(p : *mut u8) {
+	cpu().memory.free_frame(p);
 }
 
 #[no_mangle]
