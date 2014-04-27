@@ -6,6 +6,7 @@ LLVM = -3.5
 LLVM_LINK = llvm-link$(LLVM)
 OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
+LLVM_AS = llvm-as$(LLVM)
 AS = clang -c
 
 TARGET = x86_64-pc-linux-elf
@@ -52,8 +53,11 @@ main.bc: main.rs rust-core/$(CORE_CRATE) Makefile
 
 -include main.d
 
+# Use nounwind as a dummy attribute
+NO_SPLIT_STACKS = sed '/^attributes / s/ "split-stack"/ nounwind/'
+
 amalgam.bc: main.bc rust-core/core.bc
-	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
+	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) > $@
 
 OUTFILES += amalgam.bc main.bc rust-core/core.bc
 OUTFILES += amalgam.s main.s rust-core/core.s
