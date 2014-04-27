@@ -31,22 +31,29 @@ pub trait Writer {
 		}
 	}
 
+	fn writeInt(&mut self, x : int) {
+		self.writeSigned(0, false, x);
+	}
+
 	fn writeUInt(&mut self, x : uint) {
-		self.writeNumber(0, false, 10, false, x);
+		self.writeUnsigned(0, false, 10, false, x);
 	}
 
 	fn writeHex(&mut self, x : uint) {
-		self.writeNumber(0, false, 16, true, x);
+		self.writeUnsigned(0, false, 16, true, x);
 	}
 
 	fn writePtr<T>(&mut self, x : *T) {
 		self.writePHex(x as uint);
 	}
+	fn writeMutPtr<T>(&mut self, x : *mut T) {
+		self.writePHex(x as uint);
+	}
 	fn writePHex(&mut self, x : uint) {
-		self.writeNumber(16, true, 16, true, x);
+		self.writeUnsigned(16, true, 16, true, x);
 	}
 
-	fn writeNumber(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint)
+	fn writeUnsigned(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint)
 	{
 		if show_base && base == 16 {
 			self.write("0x");
@@ -73,14 +80,14 @@ pub trait Writer {
 		}
 	}
 
-	fn writeSNumber(&mut self, width : uint, leading_zero : bool, num : int) {
+	fn writeSigned(&mut self, width : uint, leading_zero : bool, num : int) {
 		let abs = if num < 0 {
 			self.putc('-');
 			-num
 		} else {
 			num
 		} as uint;
-		self.writeNumber(width, leading_zero, 10, false, abs);
+		self.writeUnsigned(width, leading_zero, 10, false, abs);
 	}
 
 	#[inline(never)]
@@ -95,7 +102,15 @@ pub trait Writer {
 	}
 }
 
-pub static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, width : 0, height : 0, color : 0 };
+pub struct DebugCon;
+
+impl Writer for DebugCon {
+	fn putc(&mut self, c : char) {
+		debugc(c);
+	}
+}
+
+static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, width : 0, height : 0, color : 0 };
 
 pub struct Console {
 	buffer : *mut u16,
@@ -109,8 +124,12 @@ pub fn init(buffer : *mut u16, width : uint, height : uint) {
 	unsafe { con = Console::new(buffer, width, height); }
 }
 
-pub fn get() -> &'static mut Console {
+fn get() -> &'static mut Console {
 	unsafe { &mut con }
+}
+
+pub fn dbg() -> DebugCon {
+	return DebugCon;
 }
 
 impl Console {
@@ -152,16 +171,15 @@ impl Console {
 	#[inline(never)]
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
 		unsafe {
-			let b = self.buffer as *mut u8;
-			let dst = mut_offset(b, 2 * to as int);
-			let src = offset(b as *u8, 2 * from as int);
+			let b = self.buffer;
+			let dst = mut_offset(b, to as int) as *mut u8;
+			let src = offset(b as *u16, from as int) as *u8;
 			memcpy(dst, src, 2 * n);
 		}
 	}
 
 	#[inline(never)]
 	fn scroll(&mut self) {
-		debugc('S');
 		let dist = self.width;
 		let count = self.width * (self.height - 1);
 		self.copy_back(0, dist, count);
@@ -195,3 +213,19 @@ impl Writer for Console {
 		}
 	}
 }
+
+
+pub fn clear() { get().clear(); }
+pub fn newline() { get().newline(); }
+#[inline(never)]
+pub fn putc(c : char) { get().putc(c); }
+#[inline(never)]
+pub fn write(string : &str) { get().write(string); }
+#[inline(never)]
+pub fn writeCStr(c_str : *u8) { get().writeCStr(c_str); }
+pub fn writeHex(x : uint) { get().writeHex(x); }
+pub fn writeInt(x : int) { get().writeInt(x); }
+pub fn writePHex(x : uint) { get().writePHex(x); }
+pub fn writePtr<T>(x : *T) { get().writePtr(x); }
+#[inline(never)]
+pub fn writeUInt(x : uint) { get().writeUInt(x); }

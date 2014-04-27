@@ -11,7 +11,7 @@ use core::option::*;
 
 use con::Console;
 use con::Writer;
-use con::con;
+use con::write;
 use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
@@ -28,34 +28,33 @@ mod x86;
 static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
 
 fn writeMBInfo(infop : *mboot::Info) {
-	let &mut con = con::get();
-	con.write("Multiboot info at ");
-	con.writePtr(infop);
-	con.putc('\n');
+	con::write("Multiboot info at ");
+	con::writePtr(infop);
+	con::putc('\n');
 
 	let &info = unsafe { &*infop };
-	con.write("Flags: ");
-	con.writeHex(info.flags as uint);
-	con.newline();
+	con::write("Flags: ");
+	con::writeHex(info.flags as uint);
+	con::newline();
 
 	if info.has(mboot::MemorySize) {
-		con.writeUInt(info.mem_lower as uint);
-		con.write("kB lower memory, ");
-		con.writeUInt(info.mem_upper as uint);
-		con.write("kB upper memory, ");
-		con.writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024) as uint);
-		con.write("MB total.\n");
+		con::writeUInt(info.mem_lower as uint);
+		con::write("kB lower memory, ");
+		con::writeUInt(info.mem_upper as uint);
+		con::write("kB upper memory, ");
+		con::writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024) as uint);
+		con::write("MB total.\n");
 	}
 	// FIXME start32 doesn't copy this
 	if info.has(mboot::CommandLine) {
 		let cmdline : *u8 = PhysAddr(info.cmdline as uint);
-		con.write("Command line @");
-		con.writePtr(cmdline);
-		con.write(" (");
-		con.writeHex(info.cmdline as uint);
-		con.write(") \"");
-		con.writeCStr(cmdline);
-		con.write("\"\n");
+		con::write("Command line @");
+		con::writePtr(cmdline);
+		con::write(" (");
+		con::writeHex(info.cmdline as uint);
+		con::write(") \"");
+		con::writeCStr(cmdline);
+		con::write("\"\n");
 	}
 }
 
@@ -87,12 +86,8 @@ impl PerCpu {
 #[no_mangle]
 pub unsafe fn start64() -> ! {
 	con::init(MutPhysAddr(0xb8000), 80, 25);
-	con.clear();
-	con.write("Hello World!\n");
-	for i in range(0,35) {
-		con.writeUInt(i as uint);
-		con.newline();
-	}
+	con::clear();
+	write("Hello World!\n");
 
 	x86::lgdt(start32::Gdtr());
 
@@ -102,7 +97,7 @@ pub unsafe fn start64() -> ! {
 
 	let &mut memory = &mut mem::global;
 	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint);
-	con.write("Memory initialized. ");
+	write("Memory initialized. ");
 	memory.stat();
 
 	let mut cpu = PerCpu::new();

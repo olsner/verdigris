@@ -3,9 +3,12 @@ use core::iter::range_step;
 use core::option::*;
 use core::ptr::offset;
 
-use con::Console;
-use con::Writer;
 use con;
+use con::newline;
+use con::write;
+use con::writePHex;
+use con::writePtr;
+use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
@@ -101,17 +104,16 @@ impl Global {
 			return;
 		}
 
-		let &mut con = con::get();
 		let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
 		let mut count = 0;
 		for item in mmap {
-			con.newline();
-			con.writePHex(item.start as uint);
-			con.newline();
-			con.writePHex(item.length as uint);
-			con.newline();
-			con.writeUInt(item.item_type as uint);
-			con.newline();
+			newline();
+			writePHex(item.start as uint);
+			newline();
+			writePHex(item.length as uint);
+			newline();
+			writeUInt(item.item_type as uint);
+			newline();
 			for p in range_step(item.start, item.start + item.length, 4096) {
 				if (p as uint > min_addr) {
 					self.free_frame(PhysAddr(p as uint));
@@ -161,12 +163,11 @@ impl Global {
 	}
 
 	pub fn stat(&self) {
-		let &mut con = con::get();
-		con.write("Free: ");
-		con.writeUInt(self.free_pages() * 4);
-		con.write("KiB, Used: ");
-		con.writeUInt(self.used_pages() * 4);
-		con.write("KiB\n");
+		write("Free: ");
+		writeUInt(self.free_pages() * 4);
+		write("KiB, Used: ");
+		writeUInt(self.used_pages() * 4);
+		write("KiB\n");
 	}
 }
 
@@ -212,15 +213,14 @@ impl PerCpu {
 	pub fn test(&mut self) {
 		let mut head = None;
 		let mut count = 0;
-		let &mut con = con::get();
 		loop {
 			let p = self.alloc_frame();
-			con.write("Allocation #");
-			con.writeUInt(count);
-			con.write(": ");
-			con.writePtr(from_option(p, 0 as *mut u8) as *u8);
-			con.newline();
-			get().stat();
+//			write("Allocation #");
+//			writeUInt(count);
+//			write(": ");
+//			writePtr(from_option(p, 0 as *mut u8) as *u8);
+//			newline();
+//			get().stat();
 			match p {
 				Some(pp) => {
 					push_frame(&mut head, pp);
@@ -229,9 +229,9 @@ impl PerCpu {
 				None => break
 			}
 		}
-		con.write("Allocated everything: ");
-		con.writeUInt(count);
-		con.write(" pages\n");
+		write("Allocated everything: ");
+		writeUInt(count);
+		write(" pages\n");
 		get().stat();
 		loop {
 			match head {
