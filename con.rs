@@ -18,13 +18,19 @@ pub fn debugc(c : char) {
 	unsafe { asm!("outb %al,$$0xe9": :"{al}"(c as u8) :: "volatile"); }
 }
 
+fn memset16(dst : *mut u16, v : u16, count : uint) {
+	unsafe { asm!("rep stosw" : : "{rdi}"(dst), "{ax}"(v), "{rcx}"(count) : "rdi", "rcx", "memory"); }
+}
+
 pub trait Writer {
 	fn putc(&mut self, c : char);
 
+	#[inline(never)]
 	fn newline(&mut self) {
 		self.putc('\n');
 	}
 
+	#[inline(never)]
 	fn write(&mut self, string : &str) {
 		for i in range(0, string.len()) {
 			self.putc(string[i] as char);
@@ -162,13 +168,15 @@ impl Console {
 		self.position += count;
 	}
 
+	#[inline(always)]
 	pub fn clear_range(&mut self, start : uint, length : uint) {
-		for i in range(start, start + length) {
-			self.putchar(i, self.color);
-		}
+		memset16(
+			unsafe { mut_offset(self.buffer, start as int) },
+			self.color,
+			length);
 	}
 
-	#[inline(never)]
+	#[inline(always)]
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
 		unsafe {
 			let b = self.buffer;
@@ -178,7 +186,7 @@ impl Console {
 		}
 	}
 
-	#[inline(never)]
+	#[inline(always)]
 	fn scroll(&mut self) {
 		let dist = self.width;
 		let count = self.width * (self.height - 1);

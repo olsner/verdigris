@@ -11,6 +11,19 @@ memset:
 1:
 	.size	memset, 1b - memset
 
+	.text
+	.section	.text.memset16,"ax",@progbits
+	.globl	memset16
+	.type	memset16,@function
+memset16:
+	# rdi = target, rsi = data, rdx = count
+	movl %esi, %eax
+	movq %rdx, %rcx # save one byte: assume count < 4GB
+	rep stosw
+	retq
+1:
+	.size	memset16, 1b - memset16
+
 	.section	.text.memcpy,"ax",@progbits
 	.globl	memcpy
 	.type	memcpy,@function
