@@ -41,16 +41,20 @@ pub struct FBPixelFormat {
 
 pub enum InfoFlags {
 	MemorySize = 1,
-	MBI_FLAG_BOOTDEV = 2,
+	BootDevice = 2,
 	CommandLine = 4,
 	Modules = 8,
-	MBI_FLAGS_SYMS = 16 | 32,
+    // There are two formats for the symbol bit of the info struct, not sure
+    // what they are though.
+	Symbols = 16 | 32,
+    Symbols1 = 16,
+    Symbols2 = 32,
 	MemoryMap = 64,
-	MBI_FLAG_DRIVES = 128,
-	MBI_FLAG_CFGTBL = 256,
-	MBI_FLAG_LOADER_NAME = 512,
-	MBI_FLAG_APM_TABLE = 1024,
-	MBI_FLAG_VBE = 2048
+	Drives = 128,
+	ConfigTable = 256,
+	LoaderName = 512,
+	APMTable = 1024,
+	VBEInfo = 2048
 }
 
 pub struct Info {

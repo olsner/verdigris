@@ -3,11 +3,9 @@ use core::iter::range_step;
 use core::option::*;
 use core::ptr::offset;
 
-use con;
 use con::newline;
 use con::write;
 use con::writePHex;
-use con::writePtr;
 use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
@@ -21,7 +19,7 @@ extern {
 fn memset(dst : *mut u8, v : u8, count : uint);
 }
 
-mod framestack {
+pub mod framestack {
 
 	use core::option::*;
 
@@ -125,7 +123,7 @@ impl Global {
 			writeUInt(item.item_type as uint);
 			newline();
 			for p in range_step(item.start, item.start + item.length, 4096) {
-				if (p as uint > min_addr) {
+				if p as uint > min_addr {
 					self.free_frame(MutPhysAddr(p as uint));
 					count += 1;
 				}

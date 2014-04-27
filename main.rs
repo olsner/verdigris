@@ -3,14 +3,12 @@
 #![no_main]
 #![feature(globs)]
 #![feature(asm)]
+// Adding pub mod (another fix for this warning) increases footprint, so just
+// disble it instead.
+#![allow(visible_private_types)]
 
 extern crate core;
 
-use core::iter::*;
-use core::option::*;
-
-use con::Console;
-use con::Writer;
 use con::write;
 use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
@@ -18,6 +16,7 @@ use start32::PhysAddr;
 use start32::MutPhysAddr;
 use x86::idt;
 
+#[allow(dead_code)]
 mod con;
 mod mboot;
 mod mem;
@@ -27,6 +26,7 @@ mod x86;
 
 static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
 
+#[allow(dead_code)]
 fn writeMBInfo(infop : *mboot::Info) {
 	con::write("Multiboot info at ");
 	con::writePtr(infop);
@@ -58,17 +58,17 @@ fn writeMBInfo(infop : *mboot::Info) {
 	}
 }
 
-pub fn generic_irq_handler(vec : u8) {
+pub fn generic_irq_handler(_vec : u8) {
 }
 
-pub fn page_fault(error : u64) {
+pub fn page_fault(_error : u64) {
 }
 
 pub fn idle() -> ! {
 	loop { unsafe { asm!("hlt"); } }
 }
 
-struct PerCpu {
+pub struct PerCpu {
 	selfp : *mut PerCpu,
 	memory : mem::PerCpu,
 }
@@ -100,7 +100,7 @@ pub fn cpu() -> &mut PerCpu {
 }
 
 #[lang="exchange_malloc"]
-pub fn malloc(size : uint) -> *mut u8 {
+pub fn malloc(_size : uint) -> *mut u8 {
 	return cpu().memory.alloc_frame_panic();
 }
 
@@ -135,5 +135,5 @@ pub unsafe fn start64() -> ! {
 //		con.putc('\n');
 //		i += 1;
 //	}
-	idle();
+	cpu.run();
 }

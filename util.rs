@@ -13,7 +13,7 @@ pub fn abort() -> ! {
 	}
 }
 
-#[no_mangle]
+#[no_mangle] #[allow(dead_code)]
 pub fn breakpoint() {
 	unsafe { asm!("int3") }
 }

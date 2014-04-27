@@ -86,7 +86,7 @@ pub fn build(target : &mut [Entry, ..48], entries : &[BuildEntry], default : fn(
 	}
 }
 
-pub fn limit(table : &[Entry, ..48]) -> u16 {
+pub fn limit(_table : &[Entry, ..48]) -> u16 {
 	return 48 * 16 - 1;
 }
 
