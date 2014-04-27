@@ -33,7 +33,6 @@ KERNEL_OBJS += start32.o
 
 CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core --crate-file-name)
 
-
 rust_kernel: SHELL=/bin/bash
 rust_kernel: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) -o $@ -Map $@.map -T $^
@@ -82,7 +81,9 @@ rust-core/core.bc:
 rust-core/$(CORE_CRATE): RUSTC_DEP_OUT = rust-core/crate.d
 rust-core/$(CORE_CRATE):
 	$(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
+OUTFILES += rust-core/$(CORE_CRATE)
 
 -include rust-core/core.d
 -include rust-core/crate.d
+OUTFILES += rust-core/core.d rust-core/crate.d
 
