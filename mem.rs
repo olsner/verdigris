@@ -162,6 +162,7 @@ impl Global {
 		self.num_used
 	}
 
+	#[inline(never)]
 	pub fn stat(&self) {
 		write("Free: ");
 		writeUInt(self.free_pages() * 4);
@@ -171,7 +172,8 @@ impl Global {
 	}
 }
 
-pub fn get() -> &'static mut Global {
+#[inline(always)]
+pub fn get() -> &mut Global {
 	unsafe { &mut global }
 }
 
@@ -185,17 +187,14 @@ impl PerCpu {
 			Some(page) => { return Some(page as *mut u8); }
 			None => {}
 		}
-		self.steal_frame(); self.steal_frame();
-		match pop_frame(&mut self.free) {
-			Some(page) => Some(page as *mut u8),
-			None => None
-		}
+		self.free = get().alloc_frame();
+		return self.steal_frame();
 	}
 
-	pub fn steal_frame(&mut self) {
+	pub fn steal_frame(&mut self) -> Option<*mut u8> {
 		match get().alloc_frame() {
-			Some(page) => push_frame(&mut self.free, page),
-			None => ()
+			Some(page) => Some(page as *mut u8),
+			None => None
 		}
 	}
 
@@ -222,22 +221,27 @@ impl PerCpu {
 //			newline();
 //			get().stat();
 			match p {
-				Some(pp) => {
-					push_frame(&mut head, pp);
-					count += 1;
-				}
+				Some(pp) => push_frame(&mut head, pp),
 				None => break
 			}
+			count += 1;
 		}
 		write("Allocated everything: ");
 		writeUInt(count);
 		write(" pages\n");
 		get().stat();
 		loop {
-			match head {
+//			write("Allocation #");
+//			writeUInt(count);
+//			write(": ");
+//			writePtr(from_option(head, 0 as *mut FreeFrame) as *u8);
+//			newline();
+//			get().stat();
+			match pop_frame(&mut head) {
 				Some(p) => self.free_frame(p as *u8),
 				None => break
 			}
+			count -= 1;
 		}
 	}
 }

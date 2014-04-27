@@ -95,14 +95,13 @@ pub unsafe fn start64() -> ! {
 	idt::build(&mut idt_table, handlers, generic_irq_handler);
 	idt::load(&idt_table);
 
-	let &mut memory = &mut mem::global;
-	memory.init(&*start32::MultiBootInfo(), start32::memory_start as uint);
+	mem::global.init(&*start32::MultiBootInfo(), start32::memory_start as uint);
 	write("Memory initialized. ");
-	memory.stat();
+	mem::global.stat();
 
 	let mut cpu = PerCpu::new();
 	cpu.memory.test();
-	memory.stat();
+	mem::global.stat();
 
 //	let mut i = 0;
 //	loop {
