@@ -21,7 +21,7 @@ RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(
 all: rust_kernel rust_kernel.elf
 
 clean:
-	rm -fr $(OUTFILES)
+	rm -f $(OUTFILES)
 
 KERNEL_OBJS = runtime.o
 KERNEL_OBJS += amalgam.o
