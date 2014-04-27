@@ -1,0 +1,8 @@
+/rust_kernel
+/rust_kernel.*
+!start32.o
+*.o
+*.s
+*.bc
+*.ll
+*.d
