@@ -15,35 +15,70 @@ use start32::PhysAddr;
 use start32::MutPhysAddr;
 use util::abort;
 
+use mem::framestack::*;
+
 extern {
 fn memset(dst : *mut u8, v : u8, count : uint);
 }
 
-struct FreeFrame {
-	next : FreeFrameP
-}
-type FreeFrameP = Option<*mut FreeFrame>;
+mod framestack {
 
-fn make_free_frame<T>(p : *T, next : FreeFrameP) -> FreeFrameP {
-	let free = p as *mut FreeFrame;
-	unsafe { (*free).next = next; }
-	return Some(free);
+	use core::option::*;
+
+	struct FreeFrame {
+		next : FreeFrameS
+	}
+	pub type FreeFrameS = *mut FreeFrame;
+	pub type FreeFrameP = Option<*mut FreeFrame>;
+
+	pub static none : FreeFrameS = 0 as *mut FreeFrame;
+
+	fn from_option<T>(x : Option<T>, def : T) -> T {
+		match x {
+			Some(val) => val,
+			None => def
+		}
+	}
+
+	pub fn store(p : FreeFrameP) -> FreeFrameS {
+		from_option(p, none)
+	}
+
+	pub fn push_frame<T>(head : &mut FreeFrameS, frame : *mut T) {
+		let free = frame as *mut FreeFrame;
+		unsafe { (*free).next = *head; }
+		*head = free;
+	}
+
+	pub fn pop_frame(head : &mut FreeFrameS) -> FreeFrameP {
+		if *head == none {
+			None
+		} else {
+			let page = *head;
+			unsafe {
+				*head = (*page).next;
+				(*page).next = none;
+			}
+			Some(page)
+		}
+	}
+
 }
 
 pub struct Global {
 	// Frames that are uninitialized (except for the first word)
-	garbage : FreeFrameP,
+	garbage : FreeFrameS,
 	// Frames that are all zeroes except for the first word
-	free : FreeFrameP,
+	free : FreeFrameS,
 	num_used : uint,
 	num_total : uint,
 }
 
-pub static empty_global : Global = Global { garbage : None, free : None, num_used : 0, num_total : 0 };
+pub static empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
 pub static mut global : Global = empty_global;
 
 pub struct PerCpu {
-	free : FreeFrameP
+	free : FreeFrameS
 }
 
 struct MemoryMap {
@@ -69,34 +104,8 @@ impl Iterator<MemoryMapItem> for MemoryMap {
 	}
 }
 
-fn push_frame<T>(head : &mut FreeFrameP, frame : *mut T) {
-	let free = frame as *mut FreeFrame;
-	unsafe { (*free).next = *head; }
-	*head = Some(free);
-}
-
-fn clear(page : *mut FreeFrame) {
+fn clear<T>(page : *mut T) {
 	unsafe { memset(page as *mut u8, 0, 4096); }
-}
-
-fn pop_frame(head : &mut FreeFrameP) -> FreeFrameP {
-	match *head {
-		Some(page) => {
-			unsafe {
-				*head = (*page).next;
-				(*page).next = None;
-			}
-			Some(page)
-		},
-		None => None
-	}
-}
-
-fn from_option<T>(x : Option<T>, def : T) -> T {
-	match x {
-		Some(val) => val,
-		None => def
-	}
 }
 
 impl Global {
@@ -128,7 +137,7 @@ impl Global {
 
 	pub fn free_frame(&mut self, vpaddr : *mut u8) {
 		self.num_used -= 1;
-		push_frame(&mut self.garbage, vpaddr as *mut FreeFrame);
+		push_frame(&mut self.garbage, vpaddr);
 	}
 
 	pub fn alloc_frame(&mut self) -> FreeFrameP {
@@ -145,13 +154,6 @@ impl Global {
 				},
 				None => { None }
 			}
-		}
-	}
-
-	pub fn alloc_frame_panic(&mut self) -> *mut FreeFrame {
-		match self.alloc_frame() {
-			Some(page) => page,
-			None => abort()
 		}
 	}
 
@@ -180,7 +182,7 @@ pub fn get() -> &mut Global {
 
 impl PerCpu {
 	pub fn new() -> PerCpu {
-		PerCpu { free : None }
+		PerCpu { free : none }
 	}
 
 	pub fn alloc_frame(&mut self) -> Option<*mut u8> {
@@ -188,7 +190,7 @@ impl PerCpu {
 			Some(page) => { return Some(page as *mut u8); }
 			None => {}
 		}
-		self.free = get().alloc_frame();
+		self.free = store(get().alloc_frame());
 		return self.steal_frame();
 	}
 
@@ -211,7 +213,7 @@ impl PerCpu {
 	}
 
 	pub fn test(&mut self) {
-		let mut head = None;
+		let mut head = none;
 		let mut count = 0;
 		loop {
 			let p = self.alloc_frame();
