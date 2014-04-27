@@ -77,12 +77,12 @@ pub type Table = [Entry, ..48];
 
 pub fn build(target : &mut [Entry, ..48], entries : &[BuildEntry], default : fn(u8)) {
 	let default_entry = entry(default as *u8);
-	let table_size = 48;
+	let table_size : uint = 48;
 	for i in range(0, table_size) {
 		target[i] = default_entry;
 	}
 	for &(vec,handler) in iter(entries) {
-		target[vec] = entry(handler.fn_ptr());
+		target[vec as uint] = entry(handler.fn_ptr());
 	}
 }
 
