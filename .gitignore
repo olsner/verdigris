@@ -1,8 +1,12 @@
 /rust_kernel
 /rust_kernel.*
-!start32.o
+# TODO Time to move build products to a separate folder...
 *.o
 *.s
 *.bc
 *.ll
 *.d
+
+!start32.o
+!syscall.s
+!runtime.s

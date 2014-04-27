@@ -15,7 +15,7 @@ CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
-OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64 -internalize
+OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64,syscall -internalize
 RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
 all: rust_kernel rust_kernel.elf
@@ -23,7 +23,7 @@ all: rust_kernel rust_kernel.elf
 clean:
 	rm -f $(OUTFILES)
 
-KERNEL_OBJS = runtime.o
+KERNEL_OBJS = runtime.o syscall.o
 KERNEL_OBJS += amalgam.o
 
 OUTFILES :=

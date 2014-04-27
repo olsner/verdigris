@@ -98,3 +98,44 @@ pub unsafe fn load(table: *[Entry, ..48]) {
 }
 
 } // mod idt
+
+pub mod msr {
+	pub enum MSR {
+		EFER = 0xc000_0080,
+		STAR = 0xc000_0081,
+		LSTAR = 0xc000_0082,
+		CSTAR = 0xc000_0083,
+		FMASK = 0xc000_0084,
+		GSBASE = 0xc000_0101
+	}
+
+	pub unsafe fn wrmsr(msr : MSR, val : uint) {
+		asm!("wrmsr":
+		: "{ecx}" (msr as u32),
+		  "{edx}" ((val >> 32) as u32),
+		  "{eax}" (val as u32)
+		:
+		: "volatile");
+	}
+
+	pub unsafe fn rdmsr(msr : MSR) -> uint {
+		let mut h : uint = 0;
+		let mut l : uint = 0;
+		asm!("rdmsr"
+		: "={edx}" (h),
+		  "={eax}" (l)
+		: "{ecx}" (msr as u32));
+		return (h << 32) | l;
+	}
+
+}
+
+pub mod rflags {
+	pub static IF : uint = 1 << 9;
+	pub static VM : uint = 1 << 17;
+}
+
+pub mod efer {
+	pub static SCE : uint = 1;
+	pub static NXE : uint = 1 << 11;
+}

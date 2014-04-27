@@ -14,6 +14,7 @@ use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
 use start32::MutPhysAddr;
+use util::abort;
 use x86::idt;
 
 #[allow(dead_code)]
@@ -70,14 +71,24 @@ pub fn idle() -> ! {
 
 pub struct PerCpu {
 	selfp : *mut PerCpu,
+	// Just after syscall entry, this will actually be the user process' rsp.
+	stack : *mut u8,
 	memory : mem::PerCpu,
 }
 
 impl PerCpu {
-	// TODO Always do a heap allocation so we can populate selfp with a proper
-	// value
-	fn new() -> PerCpu {
-		PerCpu { selfp : 0 as *mut PerCpu, memory : mem::PerCpu::new() }
+	unsafe fn new() -> *mut PerCpu {
+		let p = mem::global.alloc_frame_panic() as *mut PerCpu;
+		*p = PerCpu {
+			selfp : p,
+			stack : mem::global.alloc_frame_panic(),
+			memory : mem::PerCpu::new()
+		};
+		return p
+	}
+
+	unsafe fn start(&mut self) {
+		setup_msrs(self.selfp as uint);
 	}
 
 	fn run(&mut self) -> ! {
@@ -109,6 +120,55 @@ pub fn free(p : *mut u8) {
 	cpu().memory.free_frame(p);
 }
 
+// Note: tail-called from the syscall code, return by switching to a process.
+#[no_mangle]
+pub fn syscall(
+	// Parameter list of doom :/ If we fix the relevant bits of the process
+	// struct we can move some of this into the syscall.s asssembly instead.
+
+	// syscall arguments. Quite annoying that rax isn't acessible though.
+	_rdi: uint,
+	_rsi: uint,
+	_rdx: uint,
+	_r10: uint,
+	_r8: uint,
+	_nr : uint, // saved_rax
+	_r9: uint,
+
+	// user-process' old flags and rip, needs to be saved in the process too
+	_rip: uint,
+	_rflags: uint,
+	// callee-save registers we need to save in the process structure
+	_saved_rbp: uint,
+	_saved_rbx: uint,
+	_saved_r12: uint,
+	_saved_r13: uint,
+	_saved_r14: uint,
+	_saved_r15: uint
+) -> ! {
+	con::write("syscall!\n");
+	abort();
+}
+
+unsafe fn setup_msrs(gs : uint) {
+	use x86::msr::*;
+	use x86::rflags;
+	use x86::efer;
+	use x86::seg;
+	#[allow(dead_code)]
+	extern {
+		fn syscall_entry_stub();
+		fn syscall_entry_compat();
+	}
+
+	wrmsr(STAR, (seg::user_code32_base << 16) | seg::code);
+	wrmsr(LSTAR, syscall_entry_stub as uint);
+	wrmsr(CSTAR, syscall_entry_compat as uint);
+	wrmsr(FMASK, rflags::IF | rflags::VM);
+	wrmsr(EFER, rdmsr(EFER) | efer::SCE | efer::NXE);
+	wrmsr(GSBASE, gs);
+}
+
 #[no_mangle]
 pub unsafe fn start64() -> ! {
 	con::init(MutPhysAddr(0xb8000), 80, 25);
@@ -125,7 +185,9 @@ pub unsafe fn start64() -> ! {
 	write("Memory initialized. ");
 	mem::global.stat();
 
-	let mut cpu = PerCpu::new();
+	let pcpu = PerCpu::new();
+	let &mut cpu = &*pcpu;
+	cpu.start();
 	cpu.memory.test();
 	mem::global.stat();
 

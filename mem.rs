@@ -155,6 +155,13 @@ impl Global {
 		}
 	}
 
+	pub fn alloc_frame_panic(&mut self) -> *mut u8 {
+		match self.alloc_frame() {
+			Some(page) => page as *mut u8,
+			None => abort()
+		}
+	}
+
 	pub fn free_pages(&self) -> uint {
 		self.num_total - self.num_used
 	}
