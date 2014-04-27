@@ -59,9 +59,8 @@ NO_SPLIT_STACKS = sed '/^attributes / s/ "split-stack"/ nounwind/'
 amalgam.bc: main.bc rust-core/core.bc
 	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) > $@
 
-OUTFILES += amalgam.bc main.bc rust-core/core.bc
-OUTFILES += amalgam.s main.s rust-core/core.s
-OUTFILES += amalgam.o main.o rust-core/core.o
+files = amalgam main rust-core/core
+OUTFILES += $(files:%=%.bc) $(files:%=%.s) $(files:%=%.o) $(files:%=%.ll) $(files:%=%.d)
 
 # I believe it should be possible to use llc for this step with the same result
 # as clang since we've already optimized, but it seems clang has additional
