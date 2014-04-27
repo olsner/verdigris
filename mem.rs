@@ -183,6 +183,7 @@ impl PerCpu {
 		PerCpu { free : none }
 	}
 
+	#[inline(never)]
 	pub fn alloc_frame(&mut self) -> Option<*mut u8> {
 		match pop_frame(&mut self.free) {
 			Some(page) => { return Some(page as *mut u8); }
