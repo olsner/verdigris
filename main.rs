@@ -19,8 +19,10 @@ use x86::idt;
 
 #[allow(dead_code)]
 mod con;
+mod dlist;
 mod mboot;
 mod mem;
+mod process;
 mod start32;
 mod util;
 mod x86;
