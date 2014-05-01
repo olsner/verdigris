@@ -9,7 +9,14 @@
 
 extern crate core;
 
+use core::iter::*;
+use core::mem::transmute;
+use core::option::*;
+use core::slice::*;
+
 use con::write;
+use dlist::DList;
+use process::Process;
 use start32::MultiBootInfo;
 //use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
@@ -48,7 +55,6 @@ fn writeMBInfo(infop : *mboot::Info) {
 		con::writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024) as uint);
 		con::write("MB total.\n");
 	}
-	// FIXME start32 doesn't copy this
 	if info.has(mboot::CommandLine) {
 		let cmdline : *u8 = PhysAddr(info.cmdline as uint);
 		con::write("Command line @");
@@ -171,11 +177,72 @@ unsafe fn setup_msrs(gs : uint) {
 	wrmsr(GSBASE, gs);
 }
 
+#[lang="eh_personality"]
+fn dummy() {}
+
+fn launch_user(start : uint, end : uint) -> *mut Process {
+	// TODO more
+	unsafe { transmute(~Process::new()) }
+}
+
+fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
+	con::writeMutPtr(p as *mut Process);
+	con::putc(':');
+	con::writeUInt(i);
+	write(" <-> ");
+	con::writeUInt(j);
+	con::putc(':');
+	con::writeMutPtr(q as *mut Process);
+	con::newline();
+}
+
+fn init_modules() {
+	let &info = start32::MultiBootInfo();
+	if !info.has(mboot::Modules) {
+		return;
+	}
+	let mut head = DList::empty();
+	let mut count = 0;
+	for m in iter(info.modules(start32::PhysAddr)) {
+		write("Module ");
+		con::writeHex(m.start as uint);
+		write("..");
+		con::writeHex(m.end as uint);
+		write(": ");
+		con::writeCStr(start32::PhysAddr(m.string as uint));
+		con::newline();
+
+		head.append(launch_user(m.start as uint, m.end as uint));
+		count += 1;
+	}
+	con::writeUInt(count);
+	con::newline();
+	// Now all processes are in our list. We need to remove them before it
+	// gets possible to make them runnable.
+	let mut i = 0;
+	for p in head.iter() {
+		i += 1;
+		// start iterating at j = i + 1, and q = p.next...
+		let mut j = 0;
+		for q in head.iter() {
+			j += 1;
+			if i < j {
+				assoc_procs(p, i, q, j);
+			}
+		}
+	}
+	while match head.pop() {
+		Some(_) => true,
+		None => false
+	} {}
+}
+
 #[no_mangle]
 pub unsafe fn start64() -> ! {
 	con::init(MutPhysAddr(0xb8000), 80, 25);
 	con::clear();
 	write("Hello World!\n");
+	//writeMBInfo(start32::MultiBootInfo());
 
 	x86::lgdt(start32::Gdtr());
 
@@ -183,7 +250,7 @@ pub unsafe fn start64() -> ! {
 	idt::build(&mut idt_table, handlers, generic_irq_handler);
 	idt::load(&idt_table);
 
-	mem::global.init(&*start32::MultiBootInfo(), start32::memory_start as uint);
+	mem::global.init(start32::MultiBootInfo(), start32::memory_start as uint);
 	write("Memory initialized. ");
 	mem::global.stat();
 
@@ -192,6 +259,8 @@ pub unsafe fn start64() -> ! {
 	cpu.start();
 	cpu.memory.test();
 	mem::global.stat();
+
+	init_modules();
 
 //	let mut i = 0;
 //	loop {

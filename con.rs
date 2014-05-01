@@ -235,5 +235,6 @@ pub fn writeHex(x : uint) { get().writeHex(x); }
 pub fn writeInt(x : int) { get().writeInt(x); }
 pub fn writePHex(x : uint) { get().writePHex(x); }
 pub fn writePtr<T>(x : *T) { get().writePtr(x); }
+pub fn writeMutPtr<T>(x : *mut T) { get().writeMutPtr(x); }
 #[inline(never)]
 pub fn writeUInt(x : uint) { get().writeUInt(x); }

@@ -1,6 +1,7 @@
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
+use dlist;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -41,10 +42,22 @@ pub struct FXSaveRegs {
     space : [u8, ..512]
 }
 
+impl FXSaveRegs {
+    fn new() -> FXSaveRegs {
+        FXSaveRegs { space : [0, ..512] }
+    }
+}
+
 pub struct Regs {
 	gps : [u64, ..16],
 	rip : u64,
 	rflags : u64,
+}
+
+impl Regs {
+    fn new() -> Regs {
+        Regs { gps : [0, ..16], rip : 0, rflags : 0 }
+    }
 }
 
 pub struct Process {
@@ -55,7 +68,7 @@ pub struct Process {
     count : uint,
 
     // Pointer to the process we're waiting for (if any). See flags.
-    waiting_for : *Process, // Option
+    waiting_for : *mut Process, // Option
 
     // List of processes waiting on this process.
     waiters : DList<Process>,
@@ -84,7 +97,20 @@ impl DListItem for Process {
 }
 
 impl Process {
-    fn is(&self, f : FlagBit) -> bool {
+    pub fn new() -> Process {
+        Process {
+            regs : Regs::new(),
+            flags : 0, count : 0,
+            waiting_for : dlist::null(),
+            waiters : DList::empty(),
+            node : DListNode::new(),
+            cr3 : 0,
+            fault_addr : 0,
+            fxsave : FXSaveRegs::new()
+        }
+    }
+
+    pub fn is(&self, f : FlagBit) -> bool {
         (self.flags & (1 << (f as uint))) != 0
     }
 }

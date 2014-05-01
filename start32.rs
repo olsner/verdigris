@@ -20,8 +20,8 @@ pub fn PhysAddr<T>(addr : uint) -> *T {
 	(addr + kernel_base) as *T
 }
 
-pub fn MultiBootInfo() -> *mboot::Info {
-	PhysAddr(mbi_pointer as uint)
+pub fn MultiBootInfo() -> &'static mboot::Info {
+	unsafe { &*PhysAddr(mbi_pointer as uint) }
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {

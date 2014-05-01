@@ -3,9 +3,7 @@ use core::iter::range_step;
 use core::option::*;
 use core::ptr::offset;
 
-use con::newline;
 use con::write;
-use con::writePHex;
 use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
@@ -22,6 +20,8 @@ fn memset(dst : *mut u8, v : u8, count : uint);
 pub mod framestack {
 
 	use core::option::*;
+
+	// FIXME Use stuff from the RawPtr trait to implement this.
 
 	struct FreeFrame {
 		next : FreeFrameS
@@ -115,13 +115,13 @@ impl Global {
 		let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
 		let mut count = 0;
 		for item in mmap {
-			newline();
-			writePHex(item.start as uint);
-			newline();
-			writePHex(item.length as uint);
-			newline();
-			writeUInt(item.item_type as uint);
-			newline();
+//			newline();
+//			writePHex(item.start as uint);
+//			newline();
+//			writePHex(item.length as uint);
+//			newline();
+//			writeUInt(item.item_type as uint);
+//			newline();
 			for p in range_step(item.start, item.start + item.length, 4096) {
 				if p as uint > min_addr {
 					self.free_frame(MutPhysAddr(p as uint));
@@ -235,10 +235,10 @@ impl PerCpu {
 			}
 			count += 1;
 		}
-		write("Allocated everything: ");
-		writeUInt(count);
-		write(" pages\n");
-		get().stat();
+//		write("Allocated everything: ");
+//		writeUInt(count);
+//		write(" pages\n");
+//		get().stat();
 		loop {
 //			write("Allocation #");
 //			writeUInt(count);

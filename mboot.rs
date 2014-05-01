@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+use core::slice::*;
+use core::mem::transmute;
 
 pub struct VBE {
     control_info: u32,
@@ -69,8 +70,8 @@ pub struct Info {
     pub cmdline     : u32,
 
 // if has(Modules)
-    mods_count  : u32,
-    mods_addr   : u32,
+    pub mods_count  : u32,
+    pub mods_addr   : u32,
 
 // 
     syms        : [u32, ..4],
@@ -95,13 +96,26 @@ impl Info {
 	pub fn has(&self, flag : InfoFlags) -> bool {
 		self.flags & (flag as u32) != 0
 	}
+
+    pub fn modules(&self, make_ptr : |uint| -> *Module) -> &[Module] {
+        unsafe { transmute(Slice {
+            data : make_ptr(self.mods_addr as uint),
+            len : self.mods_count as uint
+        }) }
+    }
 }
 
 pub struct Module {
-    start       : u32,
-    end         : u32,
-    string      : u32,
-    res    : u32,
+    pub start   : u32,
+    pub end     : u32,
+    pub string  : u32,
+    reserved    : u32,
+}
+
+impl Module {
+    pub fn size(&self) -> uint {
+        (self.end - self.start) as uint
+    }
 }
 
 #[packed]

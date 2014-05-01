@@ -119,8 +119,8 @@ pub mod msr {
 	}
 
 	pub unsafe fn rdmsr(msr : MSR) -> uint {
-		let mut h : uint = 0;
-		let mut l : uint = 0;
+		let mut h : uint;
+		let mut l : uint;
 		asm!("rdmsr"
 		: "={edx}" (h),
 		  "={eax}" (l)
