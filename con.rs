@@ -1,10 +1,5 @@
 use core::prelude::*;
 use core::cmp::min;
-use core::ptr::offset;
-
-unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
-	offset(dst as *T, off) as *mut T
-}
 
 // NOTE: memcpy is assumed to copy from the beginning (and will be used on
 // overlapping ranges)
@@ -100,7 +95,7 @@ pub trait Writer {
 			let mut p = c_str;
 			while *p != 0 {
 				self.putc(*p as char);
-				p = offset(p, 1);
+				p = p.offset(1);
 			}
 		}
 	}
@@ -149,7 +144,7 @@ impl Console {
 
 	pub fn putchar(&mut self, position : uint, c : u16) {
 		unsafe {
-			*mut_offset(self.buffer, position as int) = c;
+			*self.buffer.offset(position as int) = c;
 		}
 	}
 
@@ -169,7 +164,7 @@ impl Console {
 	#[inline(always)]
 	pub fn clear_range(&mut self, start : uint, length : uint) {
 		memset16(
-			unsafe { mut_offset(self.buffer, start as int) },
+			unsafe { self.buffer.offset(start as int) },
 			self.color,
 			length);
 	}
@@ -178,8 +173,8 @@ impl Console {
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
 		unsafe {
 			let b = self.buffer;
-			let dst = mut_offset(b, to as int) as *mut u8;
-			let src = offset(b as *u16, from as int) as *u8;
+			let dst = b.offset(to as int) as *mut u8;
+			let src = b.offset(from as int) as *u8;
 			memcpy(dst, src, 2 * n);
 		}
 	}

@@ -1,3 +1,5 @@
+use core::prelude::*;
+
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
@@ -101,7 +103,7 @@ impl Process {
         Process {
             regs : Regs::new(),
             flags : 0, count : 0,
-            waiting_for : dlist::null(),
+            waiting_for : RawPtr::null(),
             waiters : DList::empty(),
             node : DListNode::new(),
             cr3 : 0,

@@ -20,8 +20,8 @@ pub trait DListItem {
     fn node<'a>(&'a mut self) -> &'a mut DListNode<Self>;
 }
 
-pub fn not_null<T>(p : *mut T) -> bool { p != 0 as *mut T }
-pub fn null<T>() -> *mut T { 0 as *mut T }
+pub fn not_null<U, T : RawPtr<U>>(p : T) -> bool { p.is_not_null() }
+fn null<T>() -> *mut T { RawPtr::null() }
 fn node<'a, T : DListItem>(p : *mut T) -> &'a mut DListNode<T> {
     unsafe { (*p).node() }
 }
@@ -32,7 +32,7 @@ impl<T : DListItem> DList<T> {
     }
 
     pub fn append(&mut self, item : *mut T) {
-        if not_null(self.tail) {
+        if self.tail.is_not_null() {
             let tail = self.tail;
             self.tail = item;
             node(tail).next = item;
@@ -86,7 +86,7 @@ struct DListIter<'a, T> {
 
 impl<'a, T : DListItem> Iterator<&'a mut T> for DListIter<'a, T> {
     fn next(&mut self) -> Option<&'a mut T> {
-        if not_null(self.p) {
+        if self.p.is_not_null() {
             let res = self.p;
             self.p = node(res).next;
             unsafe { Some(&mut *res) }

@@ -1,6 +1,5 @@
 use core::prelude::*;
 use core::iter::range_step;
-use core::ptr::offset;
 
 use con::write;
 use con::writeUInt;
@@ -17,10 +16,7 @@ fn memset(dst : *mut u8, v : u8, count : uint);
 }
 
 pub mod framestack {
-
-	use core::option::*;
-
-	// FIXME Use stuff from the RawPtr trait to implement this.
+	use core::prelude::*;
 
 	struct FreeFrame {
 		next : FreeFrameS
@@ -85,7 +81,7 @@ struct MemoryMap {
 
 impl MemoryMap {
 	fn new(addr : *u8, length : uint) -> MemoryMap {
-		return MemoryMap { addr : addr, end : unsafe { offset(addr, length as int) } }
+		return MemoryMap { addr : addr, end : unsafe { addr.offset(length as int) } }
 	}
 }
 
@@ -93,7 +89,7 @@ impl Iterator<MemoryMapItem> for MemoryMap {
 	fn next(&mut self) -> Option<MemoryMapItem> {
 		if self.addr < self.end { unsafe {
 			let item = *(self.addr as *MemoryMapItem);
-			self.addr = offset(self.addr, 4 + item.item_size as int);
+			self.addr = self.addr.offset(4 + item.item_size as int);
 			Some(item)
 		} } else {
 			None
