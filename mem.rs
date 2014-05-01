@@ -1,6 +1,5 @@
-use core::iter::Iterator;
+use core::prelude::*;
 use core::iter::range_step;
-use core::option::*;
 use core::ptr::offset;
 
 use con::write;

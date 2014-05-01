@@ -9,10 +9,8 @@
 
 extern crate core;
 
-use core::iter::*;
+use core::prelude::*;
 use core::mem::transmute;
-use core::option::*;
-use core::slice::*;
 
 use con::write;
 use dlist::DList;
@@ -203,7 +201,7 @@ fn init_modules() {
 	}
 	let mut head = DList::empty();
 	let mut count = 0;
-	for m in iter(info.modules(start32::PhysAddr)) {
+	for m in info.modules(start32::PhysAddr).iter() {
 		write("Module ");
 		con::writeHex(m.start as uint);
 		write("..");

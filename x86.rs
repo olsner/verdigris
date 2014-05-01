@@ -38,10 +38,7 @@ pub mod idt {
 use x86::seg;
 use x86::Idtr;
 use x86::lidt;
-use core::iter::range;
-use core::iter::Iterator;
-use core::slice::iter;
-use core::option::*;
+use core::prelude::*;
 
 static GatePresent : uint = 0x80;
 static GateTypeInterrupt : uint = 0x0e;
@@ -81,7 +78,7 @@ pub fn build(target : &mut [Entry, ..48], entries : &[BuildEntry], default : fn(
 	for i in range(0, table_size) {
 		target[i] = default_entry;
 	}
-	for &(vec,handler) in iter(entries) {
+	for &(vec,handler) in entries.iter() {
 		target[vec as uint] = entry(handler.fn_ptr());
 	}
 }

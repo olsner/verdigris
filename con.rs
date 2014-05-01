@@ -1,8 +1,6 @@
+use core::prelude::*;
 use core::cmp::min;
-use core::container::Container;
 use core::ptr::offset;
-use core::option::*;
-use core::iter::*;
 
 unsafe fn mut_offset<T>(dst: *mut T, off: int) -> *mut T {
 	offset(dst as *T, off) as *mut T

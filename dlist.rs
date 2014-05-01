@@ -1,5 +1,4 @@
-use core::option::*;
-use core::iter::*;
+use core::prelude::*;
 
 pub struct DList<T> {
     head : *mut T,
