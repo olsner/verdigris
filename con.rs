@@ -1,18 +1,25 @@
 use core::prelude::*;
 use core::cmp::min;
+use core::mem::size_of;
 
-// NOTE: memcpy is assumed to copy from the beginning (and will be used on
-// overlapping ranges)
-extern {
-	fn memcpy(dst : *mut u8, src : *u8, count : uint);
+// NOTE: We cheat here - we know the memcpy in runtime.s copies from the
+// beginning so we use this on overlapping ranges too.
+// (To avoid having to implement memmove.)
+extern "rust-intrinsic" {
+	fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *T, count: uint);
+}
+
+#[inline]
+unsafe fn copy_memory<T>(dst: *mut T, src: *T, count: uint) {
+	copy_nonoverlapping_memory(dst, src, count);
 }
 
 pub fn debugc(c : char) {
 	unsafe { asm!("outb %al,$$0xe9": :"{al}"(c as u8) :: "volatile"); }
 }
 
-fn memset16(dst : *mut u16, v : u16, count : uint) {
-	unsafe { asm!("rep stosw" : : "{rdi}"(dst), "{ax}"(v), "{rcx}"(count) : "rdi", "rcx", "memory"); }
+unsafe fn memset16(dst : *mut u16, v : u16, count : uint) {
+	asm!("rep stosw" : : "{rdi}"(dst), "{ax}"(v), "{rcx}"(count) : "rdi", "rcx", "memory");
 }
 
 pub trait Writer {
@@ -163,19 +170,16 @@ impl Console {
 
 	#[inline(always)]
 	pub fn clear_range(&mut self, start : uint, length : uint) {
-		memset16(
-			unsafe { self.buffer.offset(start as int) },
-			self.color,
-			length);
+		unsafe {
+			memset16(self.buffer.offset(start as int), self.color, length);
+		}
 	}
 
 	#[inline(always)]
 	fn copy_back(&mut self, to : uint, from : uint, n : uint) {
 		unsafe {
 			let b = self.buffer;
-			let dst = b.offset(to as int) as *mut u8;
-			let src = b.offset(from as int) as *u8;
-			memcpy(dst, src, 2 * n);
+			copy_memory(b.offset(to as int), b.offset(from as int) as *u16, n);
 		}
 	}
 

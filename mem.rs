@@ -1,5 +1,6 @@
 use core::prelude::*;
 use core::iter::range_step;
+use core::intrinsics::set_memory;
 
 use con::write;
 use con::writeUInt;
@@ -10,10 +11,6 @@ use start32::MutPhysAddr;
 use util::abort;
 
 use mem::framestack::*;
-
-extern {
-fn memset(dst : *mut u8, v : u8, count : uint);
-}
 
 pub mod framestack {
 	use core::prelude::*;
@@ -98,7 +95,7 @@ impl Iterator<MemoryMapItem> for MemoryMap {
 }
 
 fn clear<T>(page : *mut T) {
-	unsafe { memset(page as *mut u8, 0, 4096); }
+	unsafe { set_memory(page as *mut u8, 0, 4096); }
 }
 
 impl Global {
