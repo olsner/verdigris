@@ -1,4 +1,6 @@
-# Note: currently works with rustc 0.10 (newer rustc break rust-core)
+OUTDIR ?= out
+GRUBDIR ?= $(OUTDIR)/grub
+
 RUSTC ?= rustc
 CLANG ?= clang
 CC = clang
@@ -11,14 +13,14 @@ AS = clang -c
 
 TARGET = x86_64-pc-linux-elf
 CFLAGS = -g -std=c99 -fomit-frame-pointer $(COPTFLAGS)
-CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone
+CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64,syscall -internalize
 RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
-all: rust_kernel rust_kernel.elf
+all: rust_kernel rust_kernel.elf $(OUTDIR)/grub.iso
 
 clean:
 	rm -f $(OUTFILES)
@@ -89,4 +91,25 @@ OUTFILES += rust-core/$(CORE_CRATE)
 -include rust-core/core.d
 -include rust-core/crate.d
 OUTFILES += rust-core/core.d rust-core/crate.d
+
+GRUB_MODULES = --modules="boot multiboot"
+
+GRUB_CFG = $(GRUBDIR)/boot/grub/grub.cfg
+
+$(GRUB_CFG): mkgrubcfg.sh
+	@mkdir -p $(@D)
+	bash $< > $@
+
+$(GRUBDIR)/test.mod: test.bin
+	cp -v $< $@
+
+test.bin:
+	echo -e '\x0f\x05' > $@
+
+$(GRUBDIR)/kernel: rust_kernel
+	cp -v $< $@
+
+$(OUTDIR)/grub.iso: $(GRUB_CFG) $(GRUBDIR)/kernel $(GRUBDIR)/test.mod
+	@echo Creating grub boot image $@ from $^
+	grub-mkrescue $(GRUB_MODULES) -o $@ $(GRUBDIR) >/dev/null
 

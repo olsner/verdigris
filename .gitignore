@@ -1,3 +1,4 @@
+/out/
 /rust_kernel
 /rust_kernel.*
 # TODO Time to move build products to a separate folder...
