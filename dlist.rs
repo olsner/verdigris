@@ -18,6 +18,9 @@ impl<T> DListNode<T> {
 
 pub trait DListItem {
     fn node<'a>(&'a mut self) -> &'a mut DListNode<Self>;
+    // Figure out a way to implement a node->item function, then we can remove
+    // "T" from the nodes, do links between nodes instead of items, and use a
+    // single copy of the linking code.
 }
 
 pub fn not_null<U, T : RawPtr<U>>(p : T) -> bool { p.is_not_null() }

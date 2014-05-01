@@ -8,6 +8,7 @@ extern {
 	pub static memory_start : u32;
 	//static orig_mbi_pointer : u32;
 	static gdtr : x86::Gdtr;
+	static kernel_pdp : [u64, ..512];
 }
 
 pub static kernel_base : uint = - (1 << 30);
@@ -34,4 +35,8 @@ pub fn Gdtr() -> &'static x86::Gdtr {
 
 // TOOD: Remove hardcoded lower-half mappings from start32.o
 pub fn CleanPageMappings() {
+}
+
+pub fn kernel_pdp_addr() -> u64 {
+	return &kernel_pdp as *[u64, ..512] as u64;
 }

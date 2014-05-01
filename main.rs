@@ -10,8 +10,9 @@
 extern crate core;
 
 use core::prelude::*;
-use core::mem::transmute;
+use core::mem::*;
 
+use aspace::AddressSpace;
 use con::write;
 use dlist::DList;
 use process::Process;
@@ -22,8 +23,10 @@ use start32::MutPhysAddr;
 use util::abort;
 use x86::idt;
 
+mod aspace;
 #[allow(dead_code)]
 mod con;
+mod dict;
 mod dlist;
 mod mboot;
 mod mem;
@@ -137,13 +140,22 @@ pub fn cpu() -> &mut PerCpu {
 }
 
 #[lang="exchange_malloc"]
-pub fn malloc(_size : uint) -> *mut u8 {
+pub fn malloc(size : uint) -> *mut u8 {
+	if size > 4096 {
+		abort();
+	}
 	return cpu().memory.alloc_frame_panic();
+}
+
+pub fn alloc<T>() -> *mut T {
+	malloc(size_of::<T>()) as *mut T
 }
 
 #[lang="exchange_free"]
 pub fn free(p : *mut u8) {
-	cpu().memory.free_frame(p);
+	if p.is_not_null() {
+		cpu().memory.free_frame(p);
+	}
 }
 
 // Note: tail-called from the syscall code, return by switching to a process.
@@ -201,11 +213,19 @@ fn dummy() {}
 fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
 	let end = (end_unaligned + 0xfff) & !0xfff;
 	let start_page = start & !0xfff;
-	let ret : *mut Process = unsafe { transmute(~Process::new()) };
+	let aspace : *mut AddressSpace = unsafe { transmute(~AddressSpace::new()) };
+	let ret : *mut Process = unsafe { transmute(~Process::new(aspace)) };
 	let &mut res = unsafe { &mut *ret };
 	res.regs.set_rsp(0x100000);
 	res.regs.set_rip(0x100000 + (start & 0xfff));
-	// TODO more
+
+	unsafe {
+		use aspace::mapflag::*;
+		// Stack at 1MB - kB (not executable)
+		(*aspace).mapcard_set(0x0ff000, 0, 0, Anon | R | W);
+		(*aspace).mapcard_set(0x100000, 0, start_page - 0x100000, Phys | R | X);
+		(*aspace).mapcard_set(0x100000 + (end - start_page), 0, 0, 0);
+	}
 	return ret;
 }
 

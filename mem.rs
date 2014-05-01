@@ -202,9 +202,9 @@ impl PerCpu {
 		}
 	}
 
-	pub fn alloc_frame_panic(&mut self) -> *mut u8 {
+	pub fn alloc_frame_panic<T>(&mut self) -> *mut T {
 		match self.alloc_frame() {
-			Some(page) => page,
+			Some(page) => page as *mut T,
 			None => abort()
 		}
 	}

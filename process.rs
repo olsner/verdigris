@@ -1,5 +1,6 @@
 use core::prelude::*;
 
+use aspace::AddressSpace;
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
@@ -99,7 +100,7 @@ pub struct Process {
     // Physical address of PML4 to put in CR3
     cr3 : uint,
 
-    //aspace : *AddressSpace,
+    aspace : *mut AddressSpace,
 
     // When PROC_PFAULT is set, the virtual address that faulted.
     // Note that we lose a lot of data about the mapping that we looked up
@@ -119,14 +120,15 @@ impl DListItem for Process {
 }
 
 impl Process {
-    pub fn new() -> Process {
+    pub fn new(aspace : *mut AddressSpace) -> Process {
         Process {
             regs : Regs::new(),
             flags : 0, count : 0,
             waiting_for : RawPtr::null(),
             waiters : DList::empty(),
             node : DListNode::new(),
-            cr3 : 0,
+            cr3 : unsafe { (*aspace).cr3() },
+            aspace : aspace,
             fault_addr : 0,
             fxsave : FXSaveRegs::new()
         }
