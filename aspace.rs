@@ -5,6 +5,7 @@ use dict::*;
 use dlist::*;
 use cpu;
 use start32;
+use alloc;
 
 pub mod mapflag {
     pub static X : uint = 1;
@@ -31,7 +32,6 @@ pub mod mapflag {
 // memory - it represents each process' wishful thinking about how their memory
 // should look. backings and sharings control physical memory.
 pub struct MapCard {
-	vaddr : uint,
 	as_node : DictNode<uint, MapCard>,
 	handle : uint,
 	// .vaddr + .offset = handle-offset to be sent to backer on fault
@@ -45,6 +45,20 @@ pub struct MapCard {
 impl DictItem<uint> for MapCard {
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, MapCard> {
         return &mut self.as_node;
+    }
+}
+
+impl MapCard {
+    fn new(vaddr : uint, handle : uint, offset : uint) -> MapCard {
+        MapCard { as_node: DictNode::new(vaddr), handle: handle, offset: offset }
+    }
+
+    fn vaddr(&self) -> uint {
+        return self.as_node.key;
+    }
+
+    fn same_addr(&self, other : &MapCard) -> bool {
+        self.vaddr() == other.vaddr()
     }
 }
 
@@ -123,8 +137,16 @@ fn alloc_pml4() -> *mut PML4 {
 	// Since this currently is at most one 4TB range, this is easy: only a
 	// single PML4 entry maps everything by sharing the kernel's lower
 	// page tables between all processes.
-	unsafe { (*res)[511] = start32::kernel_pdp_addr(); }
+	unsafe { (*res)[511] = start32::kernel_pdp_addr() | 3; }
 	return res;
+}
+
+fn heap_copy<T>(x : T) -> *mut T {
+    unsafe {
+        let res : *mut T = alloc();
+        *res = x;
+        return res;
+    }
 }
 
 impl AddressSpace {
@@ -150,7 +172,25 @@ impl AddressSpace {
         }
     }
 
-    pub fn mapcard_set(&self, vaddr : uint, handle : uint, offset : uint, access : uint) {
-        // TODO
+    fn mapcard_add(&mut self, card : &MapCard) {
+        self.mapcards.insert(heap_copy(*card));
+    }
+
+    pub fn mapcard_set(&mut self, vaddr : uint, handle : uint, offset : uint, access : uint) {
+        // TODO Assert that vaddr & 0xfff == offset & 0xfff == 0
+        self.mapcard_set_(&MapCard::new(vaddr, handle, offset | access));
+    }
+
+    fn mapcard_set_(&mut self, new : &MapCard) {
+        match self.mapcard_find(new.vaddr()) {
+            Some(card) => {
+                if card.same_addr(new) {
+                    *card = *new;
+                    return;
+                }
+            },
+            None => {}
+        }
+        self.mapcard_add(new);
     }
 }

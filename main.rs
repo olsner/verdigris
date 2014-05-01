@@ -84,6 +84,7 @@ pub struct PerCpu {
 	stack : *mut u8,
 	memory : mem::PerCpu,
 	runqueue : DList<Process>,
+	process : *mut Process,
 }
 
 impl PerCpu {
@@ -94,6 +95,7 @@ impl PerCpu {
 			stack : mem::global.alloc_frame_panic(),
 			memory : mem::PerCpu::new(),
 			runqueue : DList::empty(),
+			process : RawPtr::null()
 		};
 		return p
 	}
@@ -122,6 +124,10 @@ impl PerCpu {
 		con::newline();
 		p.unset(process::Queued);
 		p.set(process::Running);
+		self.process = p as *mut Process;
+		// TODO Check fpu_process, see if we need to set/reset TS bit in cr0
+		// This breaks:
+		x86::set_cr3(p.cr3);
 		loop {}
 	}
 }

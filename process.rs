@@ -98,7 +98,7 @@ pub struct Process {
     node : DListNode<Process>,
 
     // Physical address of PML4 to put in CR3
-    cr3 : uint,
+    pub cr3 : uint,
 
     aspace : *mut AddressSpace,
 

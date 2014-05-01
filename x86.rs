@@ -136,3 +136,11 @@ pub mod efer {
 	pub static SCE : uint = 1;
 	pub static NXE : uint = 1 << 11;
 }
+
+pub unsafe fn set_cr3(cr3 : uint) {
+	let mut old_cr3 : uint;
+	asm!("movq %cr3, $0" : "=r"(old_cr3));
+	if old_cr3 != cr3 {
+		asm!("movq $0, %cr3" :: "r"(cr3));
+	}
+}

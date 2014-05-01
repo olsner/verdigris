@@ -29,12 +29,29 @@ fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
     unsafe { (*p).node() }
 }
 
-impl<K, V : DictItem<K>> Dict<V> {
+impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
     pub fn empty() -> Dict<V> {
         Dict { root : null() }
     }
 
+    // Return the greatest item with key <= key
     pub fn find<'a>(&'a mut self, key : K) -> Option<&'a mut V> {
-        None // TODO
+        let mut item = self.root;
+        let mut max = null();
+        while item.is_not_null() {
+            let ikey : K = node(item).key;
+            let maxKey : K = node(max).key;
+            if ikey <= key && (max.is_null() || maxKey < ikey) {
+                max = item;
+            }
+            item = node(item).right;
+        }
+        if max.is_null() { None } else { unsafe { Some(&mut *max) } }
+    }
+
+    pub fn insert(&mut self, item : *mut V) {
+        node(item).left = null();
+        node(item).right = self.root;
+        self.root = item;
     }
 }
