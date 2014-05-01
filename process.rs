@@ -49,22 +49,41 @@ impl FXSaveRegs {
     }
 }
 
+enum RegIndex {
+    RAX = 0,
+    RCX = 1,
+    RDX = 2,
+    RBX = 3,
+    RSP = 4,
+    RBP = 5,
+    RSI = 6,
+    RDI = 7
+}
+
 pub struct Regs {
-	gps : [u64, ..16],
-	rip : u64,
-	rflags : u64,
+	pub gps : [u64, ..16],
+	pub rip : u64,
+	pub rflags : u64,
 }
 
 impl Regs {
     fn new() -> Regs {
-        Regs { gps : [0, ..16], rip : 0, rflags : 0 }
+        use x86::rflags;
+        Regs { gps : [0, ..16], rip : 0, rflags : rflags::IF as u64 }
+    }
+
+    pub fn set_rsp(&mut self, rsp : uint) {
+        self.gps[RSP as uint] = rsp as u64;
+    }
+    pub fn set_rip(&mut self, rip : uint) {
+        self.rip = rip as u64;
     }
 }
 
 type Flags = uint;
 
 pub struct Process {
-    regs : Regs,
+    pub regs : Regs,
 
     // Bitwise OR of flags values
     flags : Flags,

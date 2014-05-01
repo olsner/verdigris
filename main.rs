@@ -198,9 +198,15 @@ unsafe fn setup_msrs(gs : uint) {
 #[lang="eh_personality"]
 fn dummy() {}
 
-fn new_module_process(_start : uint, _end : uint) -> *mut Process {
+fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
+	let end = (end_unaligned + 0xfff) & !0xfff;
+	let start_page = start & !0xfff;
+	let ret : *mut Process = unsafe { transmute(~Process::new()) };
+	let &mut res = unsafe { &mut *ret };
+	res.regs.set_rsp(0x100000);
+	res.regs.set_rip(0x100000 + (start & 0xfff));
 	// TODO more
-	unsafe { transmute(~Process::new()) }
+	return ret;
 }
 
 fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
@@ -230,7 +236,7 @@ fn init_modules(cpu : &mut PerCpu) {
 		con::writeCStr(start32::PhysAddr(m.string as uint));
 		con::newline();
 
-		head.append(new_module_process(m.start as uint, m.end as uint));
+		head.append(new_proc_simple(m.start as uint, m.end as uint));
 		count += 1;
 	}
 	con::writeUInt(count);
