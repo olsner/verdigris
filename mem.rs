@@ -107,6 +107,9 @@ impl Global {
 		let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
 		let mut count = 0;
 		for item in mmap {
+			if item.item_type != mboot::MemoryTypeMemory as u32 {
+				continue;
+			}
 //			newline();
 //			writePHex(item.start as uint);
 //			newline();
