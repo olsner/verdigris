@@ -80,6 +80,7 @@ pub struct PerCpu {
 	// Just after syscall entry, this will actually be the user process' rsp.
 	stack : *mut u8,
 	memory : mem::PerCpu,
+	runqueue : DList<Process>,
 }
 
 impl PerCpu {
@@ -88,7 +89,8 @@ impl PerCpu {
 		*p = PerCpu {
 			selfp : p,
 			stack : mem::global.alloc_frame_panic(),
-			memory : mem::PerCpu::new()
+			memory : mem::PerCpu::new(),
+			runqueue : DList::empty(),
 		};
 		return p
 	}
@@ -97,9 +99,27 @@ impl PerCpu {
 		setup_msrs(self.selfp as uint);
 	}
 
-	fn run(&mut self) -> ! {
-		// TODO: Pop something from run queue, run it
-		idle();
+	fn queue(&mut self, p: &mut Process) {
+		if !p.is_queued() {
+			p.set(process::Queued);
+			self.runqueue.append(p);
+		}
+	}
+
+	unsafe fn run(&mut self) -> ! {
+		match self.runqueue.pop() {
+			Some(p) => self.switch_to(&mut *p),
+			None => idle()
+		}
+	}
+
+	unsafe fn switch_to(&mut self, p: &mut Process) -> ! {
+		write("switch_to ");
+		con::writeMutPtr(p as *mut Process);
+		con::newline();
+		p.unset(process::Queued);
+		p.set(process::Running);
+		loop {}
 	}
 }
 
@@ -194,7 +214,7 @@ fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
 	con::newline();
 }
 
-fn init_modules() {
+fn init_modules(cpu : &mut PerCpu) {
 	let &info = start32::MultiBootInfo();
 	if !info.has(mboot::Modules) {
 		return;
@@ -230,7 +250,7 @@ fn init_modules() {
 		}
 	}
 	while match head.pop() {
-		Some(_) => true,
+		Some(p) => { cpu.queue(unsafe { &mut *p }); true },
 		None => false
 	} {}
 }
@@ -258,7 +278,7 @@ pub unsafe fn start64() -> ! {
 	cpu.memory.test();
 	mem::global.stat();
 
-	init_modules();
+	init_modules(&mut cpu);
 
 //	let mut i = 0;
 //	loop {

@@ -61,11 +61,13 @@ impl Regs {
     }
 }
 
+type Flags = uint;
+
 pub struct Process {
     regs : Regs,
 
     // Bitwise OR of flags values
-    flags : uint,
+    flags : Flags,
     count : uint,
 
     // Pointer to the process we're waiting for (if any). See flags.
@@ -111,7 +113,19 @@ impl Process {
         }
     }
 
+    #[inline]
     pub fn is(&self, f : FlagBit) -> bool {
-        (self.flags & (1 << (f as uint))) != 0
+        (self.flags & (1 << (f as Flags))) != 0
     }
+
+    pub fn set(&mut self, f : FlagBit) {
+        self.flags |= f as Flags;
+    }
+
+    pub fn unset(&mut self, f : FlagBit) {
+        self.flags &= !(f as Flags);
+    }
+
+    #[inline]
+    pub fn is_queued(&self) -> bool { self.is(Queued) }
 }
