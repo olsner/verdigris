@@ -1,5 +1,5 @@
-OUTDIR ?= out
-GRUBDIR ?= $(OUTDIR)/grub
+OUT ?= out
+GRUBDIR ?= $(OUT)/grub
 
 RUSTC ?= rustc
 CLANG ?= clang
@@ -20,57 +20,51 @@ COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64,syscall -internalize
 RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
-all: rust_kernel rust_kernel.elf $(OUTDIR)/grub.iso
+all: $(OUT)/kernel $(OUT)/kernel.elf $(OUT)/grub.iso
 
 clean:
-	rm -f $(OUTFILES)
+	rm -fr out
 
-KERNEL_OBJS = runtime.o syscall.o
-KERNEL_OBJS += amalgam.o
-
-OUTFILES :=
-OUTFILES += $(KERNEL_OBJS)
-OUTFILES += main.o rest-core/core.o
+KERNEL_OBJS = $(addprefix $(OUT)/, runtime.o syscall.o amalgam.o)
 
 KERNEL_OBJS += start32.o
 
 CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core --crate-file-name)
 
-rust_kernel: SHELL=/bin/bash
-rust_kernel: linker.ld $(KERNEL_OBJS)
+$(OUT)/kernel: SHELL=/bin/bash
+$(OUT)/kernel: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) -o $@ -Map $@.map -T $^
 	@echo $@: `stat -c%s $@` bytes
 	@echo $@: `grep fill $@.map | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
-rust_kernel.elf: linker.ld $(KERNEL_OBJS)
+$(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^
 
-OUTFILES += rust_kernel rust_kernel.elf rust_kernel.map
-
 ifdef CFG
-main.bc: RUSTCFLAGS += --cfg $(CFG)
+$(OUT)/main.bc: RUSTCFLAGS += --cfg $(CFG)
 endif
 
-main.bc: main.rs rust-core/$(CORE_CRATE) Makefile
+$(OUT)/main.bc: main.rs rust-core/$(CORE_CRATE) Makefile
 	$(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -Lrust-core -o $@ $<
 
--include main.d
+-include $(OUT)/main.d
 
 # Use nounwind as a dummy attribute
 NO_SPLIT_STACKS = sed '/^attributes / s/ "split-stack"/ nounwind/'
 
-amalgam.bc: main.bc rust-core/core.bc
+$(OUT)/amalgam.bc: $(OUT)/main.bc $(OUT)/rust-core/core.bc
 	$(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) > $@
-
-files = amalgam main rust-core/core
-OUTFILES += $(files:%=%.bc) $(files:%=%.s) $(files:%=%.o) $(files:%=%.ll) $(files:%=%.d)
 
 # I believe it should be possible to use llc for this step with the same result
 # as clang since we've already optimized, but it seems clang has additional
 # magic.
-%.s: %.bc Makefile
+$(OUT)/%.s: $(OUT)/%.bc Makefile
 	$(CLANG) $(CFLAGS) -S -o $@ $<
 # Hack to remove 16-byte alignment for every function.
 	sed -i 's/.align\s\+16/.align 1/g' $@
+
+$(OUT)/%.o: %.s
+	@mkdir -p $(@D)
+	$(AS) -o $@ $<
 
 # Keep it around after building the .o file
 .PRECIOUS: amalgam.s
@@ -78,19 +72,19 @@ OUTFILES += $(files:%=%.bc) $(files:%=%.s) $(files:%=%.o) $(files:%=%.ll) $(file
 %.ll: %.bc
 	$(LLVM_DIS) $<
 
-all: amalgam.ll
+all: $(OUT)/amalgam.ll
 
-rust-core/core.bc:
-	$(RUSTC) $(RUSTCFLAGS) --emit=bc rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
+$(OUT)/rust-core/core.bc:
+	@mkdir -p $(@D)
+	$(RUSTC) $(RUSTCFLAGS) --emit=bc rust-core/core/lib.rs --out-dir $(@D) -Z no-landing-pads
 
-rust-core/$(CORE_CRATE): RUSTC_DEP_OUT = rust-core/crate.d
-rust-core/$(CORE_CRATE):
-	$(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core -Z no-landing-pads
-OUTFILES += rust-core/$(CORE_CRATE)
+$(OUT)/rust-core/$(CORE_CRATE): RUSTC_DEP_OUT = $(OUT)/rust-core/crate.d
+$(OUT)/rust-core/$(CORE_CRATE):
+	@mkdir -p $(@D)
+	$(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir $(@D) -Z no-landing-pads
 
--include rust-core/core.d
--include rust-core/crate.d
-OUTFILES += rust-core/core.d rust-core/crate.d
+-include $(OUT)/rust-core/core.d
+-include $(OUT)/rust-core/crate.d
 
 GRUB_MODULES = --modules="boot multiboot"
 
@@ -100,16 +94,13 @@ $(GRUB_CFG): mkgrubcfg.sh
 	@mkdir -p $(@D)
 	bash $< > $@
 
-$(GRUBDIR)/test.mod: test.bin
-	cp -v $< $@
-
-test.bin:
+$(GRUBDIR)/test.mod:
 	echo -e '\x0f\x05' > $@
 
-$(GRUBDIR)/kernel: rust_kernel
+$(GRUBDIR)/kernel: $(OUT)/kernel
 	cp -v $< $@
 
-$(OUTDIR)/grub.iso: $(GRUB_CFG) $(GRUBDIR)/kernel $(GRUBDIR)/test.mod
+$(OUT)/grub.iso: $(GRUB_CFG) $(GRUBDIR)/kernel $(GRUBDIR)/test.mod
 	@echo Creating grub boot image $@ from $^
 	grub-mkrescue $(GRUB_MODULES) -o $@ $(GRUBDIR) >/dev/null
 
