@@ -20,17 +20,20 @@ pub struct FB {
     colors      : [u8, ..6],
 }
 
+#[allow(dead_code)]
 pub enum FBType {
     Indexed = 0,
     RGB = 1,
     Text = 2,
 }
 
+#[allow(dead_code)]
 pub struct FBPalette {
     addr        : u32,
     count       : u16,
 }
 
+#[allow(dead_code)]
 pub struct FBPixelFormat {
     red_shift   : u8,
     red_mask    : u8,
@@ -110,12 +113,6 @@ pub struct Module {
     pub end     : u32,
     pub string  : u32,
     reserved    : u32,
-}
-
-impl Module {
-    pub fn size(&self) -> uint {
-        (self.end - self.start) as uint
-    }
 }
 
 #[packed]

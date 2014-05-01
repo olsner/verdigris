@@ -212,7 +212,7 @@ impl PerCpu {
 
 	pub fn test(&mut self) {
 		let mut head = none;
-		let mut count = 0;
+//		let mut count = 0;
 		loop {
 			let p = self.alloc_frame();
 //			write("Allocation #");
@@ -225,7 +225,7 @@ impl PerCpu {
 				Some(pp) => push_frame(&mut head, pp),
 				None => break
 			}
-			count += 1;
+//			count += 1;
 		}
 //		write("Allocated everything: ");
 //		writeUInt(count);
@@ -242,7 +242,6 @@ impl PerCpu {
 				Some(p) => self.free_frame(p as *mut u8),
 				None => break
 			}
-			count -= 1;
 		}
 	}
 }

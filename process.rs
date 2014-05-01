@@ -3,7 +3,6 @@ use core::prelude::*;
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
-use dlist;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.

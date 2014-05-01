@@ -1,6 +1,5 @@
 use core::prelude::*;
 use core::cmp::min;
-use core::mem::size_of;
 
 // NOTE: We cheat here - we know the memcpy in runtime.s copies from the
 // beginning so we use this on overlapping ranges too.

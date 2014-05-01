@@ -178,7 +178,7 @@ unsafe fn setup_msrs(gs : uint) {
 #[lang="eh_personality"]
 fn dummy() {}
 
-fn launch_user(start : uint, end : uint) -> *mut Process {
+fn new_module_process(_start : uint, _end : uint) -> *mut Process {
 	// TODO more
 	unsafe { transmute(~Process::new()) }
 }
@@ -210,7 +210,7 @@ fn init_modules() {
 		con::writeCStr(start32::PhysAddr(m.string as uint));
 		con::newline();
 
-		head.append(launch_user(m.start as uint, m.end as uint));
+		head.append(new_module_process(m.start as uint, m.end as uint));
 		count += 1;
 	}
 	con::writeUInt(count);
