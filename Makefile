@@ -10,6 +10,7 @@ OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
 LLVM_AS = llvm-as$(LLVM)
 AS = clang -c
+YASM ?= yasm
 
 TARGET = x86_64-pc-linux-elf
 CFLAGS = -g -std=c99 -fomit-frame-pointer $(COPTFLAGS)
@@ -32,12 +33,12 @@ KERNEL_OBJS += start32.o
 CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rust-core --crate-file-name)
 
 $(OUT)/kernel: SHELL=/bin/bash
-$(OUT)/kernel: linker.ld $(KERNEL_OBJS)
-	$(LD) $(LDFLAGS) -o $@ -Map $@.map -T $^
-	@echo $@: `stat -c%s $@` bytes
-	@echo $@: `grep fill $@.map | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^
+	@echo $@: `grep fill $@.map | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
+$(OUT)/kernel: $(OUT)/kernel.elf
+	objcopy -O binary $< $@
+	@echo $@: `stat -c%s $@` bytes
 
 ifdef CFG
 $(OUT)/main.bc: RUSTCFLAGS += --cfg $(CFG)
@@ -65,6 +66,11 @@ $(OUT)/%.s: $(OUT)/%.bc Makefile
 $(OUT)/%.o: %.s
 	@mkdir -p $(@D)
 	$(AS) -o $@ $<
+
+$(OUT)/%.o: %.asm
+	@mkdir -p $(@D)
+	$(YASM) -i . -e -M $< -o $@ > $(@:.o=.d)
+	$(YASM) -i . -f elf64 -g dwarf2 $< -o $@ -L nasm -l $(OUT)/$*.lst
 
 # Keep it around after building the .o file
 .PRECIOUS: amalgam.s

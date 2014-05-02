@@ -75,16 +75,16 @@ pub fn page_fault(_error : u64) {
 }
 
 pub fn idle() -> ! {
-	loop { unsafe { asm!("hlt"); } }
+	loop { write("idle\n"); unsafe { asm!("hlt"); } }
 }
 
 pub struct PerCpu {
 	selfp : *mut PerCpu,
 	// Just after syscall entry, this will actually be the user process' rsp.
 	stack : *mut u8,
+	process : *mut Process,
 	memory : mem::PerCpu,
 	runqueue : DList<Process>,
-	process : *mut Process,
 }
 
 impl PerCpu {
@@ -128,7 +128,19 @@ impl PerCpu {
 		// TODO Check fpu_process, see if we need to set/reset TS bit in cr0
 		// This breaks:
 		x86::set_cr3(p.cr3);
-		loop {}
+		extern "C" {
+			fn fastret(p : &mut Process) -> !;
+			fn slowret(p : &mut Process) -> !;
+		}
+		if p.is(process::FastRet) {
+			write("fastret to ");
+			con::writeUInt(p.regs.rip as uint);
+			con::newline();
+			fastret(p);
+		} else {
+			write("slowret\n");
+			slowret(p);
+		}
 	}
 }
 
@@ -216,14 +228,19 @@ unsafe fn setup_msrs(gs : uint) {
 #[lang="eh_personality"]
 fn dummy() {}
 
+#[inline(never)]
 fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
 	let end = (end_unaligned + 0xfff) & !0xfff;
 	let start_page = start & !0xfff;
 	let aspace : *mut AddressSpace = unsafe { transmute(~AddressSpace::new()) };
 	let ret : *mut Process = unsafe { transmute(~Process::new(aspace)) };
-	let &mut res = unsafe { &mut *ret };
-	res.regs.set_rsp(0x100000);
-	res.regs.set_rip(0x100000 + (start & 0xfff));
+	unsafe {
+		(*ret).regs.set_rsp(0x100000);
+		(*ret).regs.set_rip(0x100000 + (start & 0xfff));
+			write("new_proc rip ");
+			con::writePHex((*ret).regs.rip as uint);
+			con::newline();
+	}
 
 	unsafe {
 		use aspace::mapflag::*;
@@ -232,6 +249,9 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
 		(*aspace).mapcard_set(0x100000, 0, start_page - 0x100000, Phys | R | X);
 		(*aspace).mapcard_set(0x100000 + (end - start_page), 0, 0, 0);
 	}
+	write("new_proc rip ");
+	con::writeUInt(unsafe { (*ret).regs.rip as uint });
+	con::newline();
 	return ret;
 }
 

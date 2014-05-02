@@ -40,6 +40,13 @@ pub enum FlagBit {
     PFault = 5
 }
 
+impl FlagBit {
+    #[inline]
+    fn mask(self) -> uint {
+        return 1 << (self as uint);
+    }
+}
+
 pub struct FXSaveRegs {
     space : [u8, ..512]
 }
@@ -85,6 +92,8 @@ type Flags = uint;
 
 pub struct Process {
     pub regs : Regs,
+    // Physical address of PML4 to put in CR3
+    pub cr3 : uint,
 
     // Bitwise OR of flags values
     flags : Flags,
@@ -96,9 +105,6 @@ pub struct Process {
     // List of processes waiting on this process.
     waiters : DList<Process>,
     node : DListNode<Process>,
-
-    // Physical address of PML4 to put in CR3
-    pub cr3 : uint,
 
     aspace : *mut AddressSpace,
 
@@ -121,9 +127,10 @@ impl DListItem for Process {
 
 impl Process {
     pub fn new(aspace : *mut AddressSpace) -> Process {
+        let init_flags = FastRet.mask();
         Process {
             regs : Regs::new(),
-            flags : 0, count : 0,
+            flags : init_flags, count : 0,
             waiting_for : RawPtr::null(),
             waiters : DList::empty(),
             node : DListNode::new(),
@@ -136,15 +143,15 @@ impl Process {
 
     #[inline]
     pub fn is(&self, f : FlagBit) -> bool {
-        (self.flags & (1 << (f as Flags))) != 0
+        (self.flags & f.mask()) != 0
     }
 
     pub fn set(&mut self, f : FlagBit) {
-        self.flags |= f as Flags;
+        self.flags |= f.mask();
     }
 
     pub fn unset(&mut self, f : FlagBit) {
-        self.flags &= !(f as Flags);
+        self.flags &= !f.mask();
     }
 
     #[inline]
