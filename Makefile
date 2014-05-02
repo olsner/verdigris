@@ -35,10 +35,12 @@ CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rus
 $(OUT)/kernel: SHELL=/bin/bash
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^
-	@echo $@: `grep fill $@.map | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
+	@echo $@: `grep fill $(@:.elf=.map) | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
 $(OUT)/kernel: $(OUT)/kernel.elf
 	objcopy -O binary $< $@
 	@echo $@: `stat -c%s $@` bytes
+
+-include $(OUT)/syscall.d
 
 ifdef CFG
 $(OUT)/main.bc: RUSTCFLAGS += --cfg $(CFG)

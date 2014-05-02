@@ -35,8 +35,6 @@ mod start32;
 mod util;
 mod x86;
 
-static mut idt_table : [idt::Entry, ..48] = [idt::null_entry, ..48];
-
 #[allow(dead_code)]
 fn writeMBInfo(infop : *mboot::Info) {
 	con::write("Multiboot info at ");
@@ -71,7 +69,10 @@ fn writeMBInfo(infop : *mboot::Info) {
 pub fn generic_irq_handler(_vec : u8) {
 }
 
-pub fn page_fault(_error : u64) {
+pub fn handler_PF(_error : u64) {
+}
+
+pub fn handler_NM() {
 }
 
 pub fn idle() -> ! {
@@ -315,10 +316,9 @@ pub unsafe fn start64() -> ! {
 	//writeMBInfo(start32::MultiBootInfo());
 
 	x86::lgdt(start32::Gdtr());
+	x86::ltr(x86::seg::tss64);
 
-	let handlers = [(14, idt::Error(page_fault))];
-	idt::build(&mut idt_table, handlers, generic_irq_handler);
-	idt::load(&idt_table);
+	idt::init();
 
 	mem::global.init(start32::MultiBootInfo(), start32::memory_start as uint);
 	write("Memory initialized. ");

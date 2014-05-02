@@ -17,6 +17,10 @@ bits 64
 	xor	%1, %1
 %endmacro
 
+%macro gfunc 1
+%%end: global %1:function (%%end - %1)
+%endmacro
+
 %assign i 0
 
 %macro	reglabels 1-*
@@ -54,7 +58,7 @@ endstruc
 %endrep
 %endmacro
 
-section .text.fastret
+section .text.fastret, exec
 fastret:
 	swapgs
 	zero	edx
@@ -77,14 +81,14 @@ fastret:
 .end:
 global	fastret:function (fastret.end - fastret)
 
-section .text.slowret
+section .text.slowret, exec
 slowret:
 	; TODO
 	ud2
 .end
 global	slowret:function (slowret.end - slowret)
 
-section .text.syscall_entry_stub
+section .text.syscall_entry_stub, exec
 syscall_entry_stub:
 	swapgs
 	; FIXME We have clobberable registers here, use them
@@ -130,3 +134,36 @@ syscall_entry_compat:
 .end
 global	syscall_entry_compat:function (syscall_entry_compat.end - syscall_entry_compat)
 global	syscall_entry_stub:function (syscall_entry_compat.end - syscall_entry_stub)
+
+
+section .text.handle_irq_generic, exec
+
+%macro stub 1
+	push	byte %1
+	jmp	handle_irq_generic
+%endmacro
+
+%macro handle_irqN_generic 1
+handle_irq_ %+ %1:
+	stub %1
+%endmacro
+
+irq_handlers:
+
+%assign irq 32
+%rep 17
+handle_irqN_generic irq
+%assign irq irq + 1
+%endrep
+
+gfunc irq_handlers
+
+handle_irq_generic:
+	ud2
+gfunc handle_irq_generic
+
+handler_NM_stub stub 7
+gfunc handler_NM_stub
+handler_PF_stub stub 14
+gfunc handler_PF_stub
+

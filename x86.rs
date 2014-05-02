@@ -17,6 +17,9 @@ pub unsafe fn lgdt(gdtr : &Gdtr) {
 pub unsafe fn lidt(idtr : &Idtr) {
 	asm!("lidt ($0)" :: "r" (idtr));
 }
+pub unsafe fn ltr(tr : uint) {
+	asm!("ltr %ax" :: "{ax}"(tr));
+}
 
 pub mod seg {
 	#![allow(dead_code)]
@@ -55,43 +58,54 @@ pub fn entry(handler_ptr : *u8) -> Entry {
 pub static null_entry : Entry = (0,0);
 
 pub enum Handler {
+	Ignore,
 	Error(fn(u64)),
 	NoError(fn()),
+	IRQ(fn(u8)),
 }
 
 impl Handler {
-	fn fn_ptr(&self) -> *u8 {
-		match *self {
-			Error(f) => f as *u8,
-			NoError(f) => f as *u8
-		}
-	}
 }
 
-pub type BuildEntry = (u8, Handler);
+pub type BuildEntry = (u8, extern "C" unsafe fn());
 pub type Entry = (u64,u64);
-pub type Table = [Entry, ..48];
+pub type Table = [Entry, ..49];
 
-pub fn build(target : &mut [Entry, ..48], entries : &[BuildEntry], default : fn(u8)) {
-	let default_entry = entry(default as *u8);
-	let table_size : uint = 48;
-	for i in range(0, table_size) {
-		target[i] = default_entry;
-	}
+pub fn build(target : &mut [Entry, ..49], entries : &[BuildEntry]) {
+	let table_size : uint = 49;
 	for &(vec,handler) in entries.iter() {
-		target[vec as uint] = entry(handler.fn_ptr());
+		target[vec as uint] = entry(handler as *u8);
 	}
 }
 
-pub fn limit(_table : &[Entry, ..48]) -> u16 {
-	return 48 * 16 - 1;
+pub fn limit(_table : &[Entry, ..49]) -> u16 {
+	return 49 * 16 - 1;
 }
 
-pub unsafe fn load(table: *[Entry, ..48]) {
+pub unsafe fn load(table: *[Entry, ..49]) {
 	static mut idtr : Idtr = Idtr { base : 0, limit : 0 };
 	idtr.base = (table as *u8) as uint;
 	idtr.limit = limit(&*table);
 	lidt(&idtr);
+}
+
+pub unsafe fn init() {
+	use handler_PF;
+	use handler_NM;
+	use generic_irq_handler;
+	extern {
+		fn handler_PF_stub();
+		fn handler_NM_stub();
+		// We can generate this, probably in less than 68 bytes?
+		static irq_handlers : [u32, ..17];
+	}
+	let handlers = [(14, handler_PF_stub), (7, handler_NM_stub)];
+	static mut idt_table : [Entry, ..49] = [null_entry, ..49];
+	build(&mut idt_table, handlers);
+	for i in range(32 as uint,49) {
+		idt_table[i] = entry((&irq_handlers[i - 32]) as *u32 as *u8);
+	}
+	load(&idt_table);
 }
 
 } // mod idt
