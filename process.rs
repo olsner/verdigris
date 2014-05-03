@@ -156,4 +156,10 @@ impl Process {
 
     #[inline]
     pub fn is_queued(&self) -> bool { self.is(Queued) }
+
+    pub fn aspace<'a>(&'a mut self) -> &'a mut AddressSpace {
+        unsafe {
+            return &mut *self.aspace;
+        }
+    }
 }

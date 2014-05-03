@@ -136,42 +136,29 @@ endproc
 ; syscall_entry_stub:
 proc syscall_entry_stub
 	swapgs
-	; FIXME We have clobberable registers here, use them
+	; FIXME I think we have clobberable registers here, use them
 	xchg [gs:8], rsp
-	; TODO Store in process instead.
+	push	rax
+	zero	eax
+	mov	rax, [gs:rax + gseg.proc]
+	sub	rax, proc
 	; * Save registers that aren't caller-save
-	;   That is: rbp, rbx, r12-r15
+	;   if we have syscall *return* instead, we could get rid of these, but
+	;   that would require that it return *here* and not try to switch
+	;   tasks by itself. It wouldn't be all wrong to do that though.
+	save_regs rax,  rbp,rbx,r12,r13,r14,r15
 	; * Save rip and rflags
+	mov	[rax + proc.rflags], r11
+	mov	[rax + proc.rip], rcx
 	; * Fix up for syscall vs normal calling convention.
 	;   r10 (caller-save) is used instead of rcx for argument 4
-	; * Put the saved registers somewhere nice so the kernel code can put them
-	;   in the right place in the process' structure.
-
-	; Arguments are pushed in right-to-left order (in other words, the last
-	; to be pushed is the first thing on the stack after the function's return
-	; address).
-	push	r15
-	push	r14
-	push	r13
-	push	r12
-	push	rbx
-	push	rbp
-
-	push	r11
-	push	rcx
 	mov	rcx, r10
 
-	; rax has the syscall number, move to a parameter register and move the
-	; original r9 to the stack (we usually won't need it though).
-	push	r9
-	mov	r9, rax
-
 	; The syscall function's prototype is:
-	; fn(rdi,rsi,rdx,r10,r8,r9,  rip, rflags,  saved_rbp, saved_rbx, saved_r12, ...)
+	; fn(rdi,rsi,rdx,r10,r8,r9,  rip)
 
 	extern syscall
-	call syscall
-	; If we return, fall-through to the invalid instruction below
+	jmp syscall
 
 proc syscall_entry_compat, NOSECTION
 	; Fail
@@ -271,6 +258,7 @@ proc handle_irq_generic, NOSECTION
 	; calee-save regs are not saved here because we assume that the
 	; compiler generated irq_entry code is correct.
 	save_regs rax,  rcx,r8,r9,r10,r11
+	save_regs rax,  rbp,rbx,r12,r13,r14,r15
 
 	; Set flags to a known state.
 	push	byte 0
@@ -278,16 +266,7 @@ proc handle_irq_generic, NOSECTION
 
 	; Now rdi = vector, rsi = error (or 0)
 	extern	irq_entry
-	call	irq_entry
-
-	; Fallthrough: implement a slightly more efficient return from
-	; interrupt based on the subset of regs that are preserved by calling
-	; convention.
-
-	zero	edi
-	mov	rdi, [gs:rdi + gseg.proc]
-	sub	rdi, proc ; offset because it comes from Rust code
-	jmp	slowret.from_int
+	jmp	irq_entry
 
 ; slowret: all registers are currently unknown, load *everything* from process
 ; (in rdi), then iretq

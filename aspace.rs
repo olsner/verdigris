@@ -1,10 +1,14 @@
 use core::prelude::*;
 use core::mem::transmute;
 
+use con;
+use con::write;
 use dict::*;
 use dlist::*;
 use cpu;
 use start32;
+use util::abort;
+
 use alloc;
 
 pub mod mapflag {
@@ -33,13 +37,13 @@ pub mod mapflag {
 // should look. backings and sharings control physical memory.
 pub struct MapCard {
     as_node : DictNode<uint, MapCard>,
-    handle : uint,
+    pub handle : uint,
     // .vaddr + .offset = handle-offset to be sent to backer on fault
     // For a direct physical mapping, paddr = .vaddr + .offset
     // .offset = handle-offset - vaddr
     // .offset = paddr - .vaddr
     // The low 12 bits contain flags.
-    offset : uint,
+    pub offset : uint,
 }
 
 impl DictItem<uint> for MapCard {
@@ -53,8 +57,16 @@ impl MapCard {
         MapCard { as_node: DictNode::new(vaddr), handle: handle, offset: offset }
     }
 
-    fn vaddr(&self) -> uint {
+    pub fn vaddr(&self) -> uint {
         return self.as_node.key;
+    }
+
+    pub fn paddr(&self, vaddr : uint) -> uint {
+        return (vaddr - self.vaddr()) + self.offset;
+    }
+
+    pub fn flags(&self) -> uint {
+        return self.offset & 0xfff;
     }
 
     fn same_addr(&self, other : &MapCard) -> bool {
@@ -77,13 +89,12 @@ impl MapCard {
 // table. Flags could indicate how many levels that are required, and e.g. a
 // very small process could have only one level, and map 128 pages at 0..512kB.
 pub struct Backing {
-    // Flags stored in low bits of vaddr!
-    vaddr : uint,
+    // Flags stored in low bits of vaddr/key!
     as_node : DictNode<uint, Backing>,
     // Pointer to parent sharing. Needed to unlink self when unmapping.
     // Could have room for flags (e.g. to let it be a paddr when we don't
     // need the parent - we might have a direct physical address mapping)
-    parent : *mut Sharing,
+    parent_paddr : uint,
     // Space to participate in parent's list of remappings.
     child_node : DListNode<Backing>
 }
@@ -91,6 +102,45 @@ pub struct Backing {
 impl DictItem<uint> for Backing {
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Backing> {
         return &mut self.as_node;
+    }
+}
+
+impl Backing {
+    fn new_phys(vaddrFlags : uint, phys_addr : uint) -> Backing {
+        Backing {
+            as_node: DictNode::new(vaddrFlags),
+            parent_paddr : phys_addr,
+            child_node: DListNode::new(),
+        }
+    }
+
+    pub fn vaddr(&self) -> uint {
+        return self.as_node.key & !0xfff;
+    }
+
+    pub fn flags(&self) -> uint {
+        return self.as_node.key & 0xfff;
+    }
+
+    fn pte_flags(&self) -> uint {
+        let flags = self.flags();
+        let mut pte = 5; // Present, User-accessible
+        if (flags & mapflag::X) == 0 {
+            // Set bit 63 to *disable* execute permission
+            pte |= (1 << 63);
+        }
+        if (flags & mapflag::W) != 0 {
+            pte |= 2;
+        }
+        return pte;
+    }
+
+    pub fn pte(&self) -> uint {
+        if (self.flags() & mapflag::Phys) != 0 {
+            return self.parent_paddr | self.pte_flags();
+        } else {
+            abort();
+        }
     }
 }
 
@@ -165,11 +215,8 @@ impl AddressSpace {
         return vaddr as uint - start32::kernel_base;
     }
 
-    pub fn mapcard_find<'a>(&'a mut self, vaddr : uint) -> Option<&'a mut MapCard> {
-        match self.mapcards.find(vaddr) {
-            Some(p) => unsafe { Some(&mut *p) },
-            None => None
-        }
+    pub fn mapcard_find<'a>(&mut self, vaddr : uint) -> Option<&'a mut MapCard> {
+        return self.mapcards.find(vaddr);
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
@@ -192,5 +239,52 @@ impl AddressSpace {
             None => {}
         }
         self.mapcard_add(new);
+    }
+
+    fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
+    -> &'a Backing {
+        let b = heap_copy(Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr)));
+        self.backings.insert(b);
+        return unsafe { &*b };
+    }
+
+    pub fn find_add_backing<'a>(&mut self, vaddr : uint) -> &'a Backing {
+        use aspace::mapflag::*;
+        use util::abort;
+
+        /*match self.find_backing(vaddr) {
+            Some(back) => { return back; },
+            None => ()
+        }*/
+
+        match self.mapcard_find(vaddr) {
+            Some(card) => {
+                if (card.flags() & RWX) == 0 {
+                    write("No access! "); abort();
+                }
+                if card.handle == 0 {
+                    if (card.flags() & Anon) != 0 {
+                        abort(); // self.add_anon_backing(card, vaddr);
+                    } else if (card.flags() & Phys) != 0 {
+                        return self.add_phys_backing(*card, vaddr);
+                    } else {
+                        abort();
+                    }
+                } else {
+                    abort();
+                }
+            },
+            None => {
+                write("No mapping found! "); abort();
+            }
+        }
+    }
+
+    pub fn add_pte(&mut self, vaddr : uint, pte : uint) {
+        write("Mapping ");
+        con::writePHex(vaddr);
+        write(" to ");
+        con::writePHex(pte);
+        con::newline();
     }
 }

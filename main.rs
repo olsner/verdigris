@@ -71,13 +71,31 @@ pub fn generic_irq_handler(_vec : u8) {
 }
 
 pub fn page_fault(error : uint) {
+    use aspace::mapflag;
+    use aspace::mapflag::*;
+
+    static PRESENT : uint = 1;
+    static WRITE : uint = 2;
+    static USER : uint = 4;
+    static RSVD : uint = 8;
+    static INSTR : uint = 16;
+    if (error & USER) == 0 {
+        abort();
+    }
+    let p = unsafe { cpu().get_process() };
     write("page fault ");
     con::writeHex(error);
     write(" cr2=");
     con::writePHex(x86::cr2());
     write(" in process ");
-    con::writeMutPtr(unsafe { cpu().get_process() });
+    con::writeMutPtr(p);
     con::newline();
+
+    let back = p.aspace().find_add_backing(x86::cr2());
+    // FIXME should return e.g. Option<> so we can detect failures better than
+    // just aborting.
+    p.aspace().add_pte(back.vaddr(), back.pte());
+
     abort();
 }
 
@@ -138,7 +156,6 @@ impl PerCpu {
         p.set(process::Running);
         self.process = transmute(p as *mut Process);
         // TODO Check fpu_process, see if we need to set/reset TS bit in cr0
-        // This breaks:
         x86::set_cr3(p.cr3);
         extern "C" {
             fn fastret(p : &mut Process) -> !;
@@ -160,9 +177,11 @@ impl PerCpu {
         &mut **(&self.process as *Option<&'static mut Process> as *Option<&'a mut Process> as **mut Process)
     }
 
-    unsafe fn switch_back(&mut self) -> ! {
-        let p = self.get_process();
-        self.switch_to(p);
+    fn leave_proc(&mut self) {
+        unsafe {
+            let p = self.get_process();
+            p.unset(process::Running);
+        }
     }
 }
 
@@ -208,19 +227,8 @@ pub fn syscall(
     _rdx: uint,
     _r10: uint,
     _r8: uint,
-    _nr : uint, // saved_rax
     _r9: uint,
-
-    // user-process' old flags and rip, needs to be saved in the process too
-    _rip: uint,
-    _rflags: uint,
-    // callee-save registers we need to save in the process structure
-    _saved_rbp: uint,
-    _saved_rbx: uint,
-    _saved_r12: uint,
-    _saved_r13: uint,
-    _saved_r14: uint,
-    _saved_r15: uint
+    _nr : uint, // saved_rax
 ) -> ! {
     con::write("syscall!\n");
     abort();

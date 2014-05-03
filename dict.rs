@@ -35,7 +35,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
     }
 
     // Return the greatest item with key <= key
-    pub fn find<'a>(&'a mut self, key : K) -> Option<&'a mut V> {
+    pub fn find<'a>(&mut self, key : K) -> Option<&'a mut V> {
         let mut item = self.root;
         let mut max = null();
         while item.is_not_null() {

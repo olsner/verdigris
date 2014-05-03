@@ -44,10 +44,12 @@ pub mod seg {
 
 pub mod idt {
 
+use core::prelude::*;
+
+use process::Process;
 use x86::seg;
 use x86::Idtr;
 use x86::lidt;
-use core::prelude::*;
 
 static GatePresent : uint = 0x80;
 static GateTypeInterrupt : uint = 0x0e;
@@ -96,10 +98,12 @@ pub unsafe fn load(table: *[Entry, ..49]) {
 }
 
 #[no_mangle]
-pub fn irq_entry(vec : u8, err : uint) {
+pub fn irq_entry(vec : u8, err : uint) -> ! {
     use page_fault;
     use handler_NM;
     use generic_irq_handler;
+    use cpu;
+    unsafe { cpu().leave_proc(); }
     if vec == 7 {
         handler_NM();
     } else if vec == 14 {
@@ -107,6 +111,7 @@ pub fn irq_entry(vec : u8, err : uint) {
     } else if vec >= 32 {
         generic_irq_handler(vec);
     }
+    unsafe { cpu().run(); }
 }
 
 pub unsafe fn init() {
