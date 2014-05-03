@@ -44,21 +44,21 @@ pub struct FBPixelFormat {
 }
 
 pub enum InfoFlags {
-	MemorySize = 1,
-	BootDevice = 2,
-	CommandLine = 4,
-	Modules = 8,
+    MemorySize = 1,
+    BootDevice = 2,
+    CommandLine = 4,
+    Modules = 8,
     // There are two formats for the symbol bit of the info struct, not sure
     // what they are though.
-	Symbols = 16 | 32,
+    Symbols = 16 | 32,
     Symbols1 = 16,
     Symbols2 = 32,
-	MemoryMap = 64,
-	Drives = 128,
-	ConfigTable = 256,
-	LoaderName = 512,
-	APMTable = 1024,
-	VBEInfo = 2048
+    MemoryMap = 64,
+    Drives = 128,
+    ConfigTable = 256,
+    LoaderName = 512,
+    APMTable = 1024,
+    VBEInfo = 2048
 }
 
 pub struct Info {
@@ -96,9 +96,9 @@ pub struct Info {
 }
 
 impl Info {
-	pub fn has(&self, flag : InfoFlags) -> bool {
-		self.flags & (flag as u32) != 0
-	}
+    pub fn has(&self, flag : InfoFlags) -> bool {
+        self.flags & (flag as u32) != 0
+    }
 
     pub fn modules(&self, make_ptr : |uint| -> *Module) -> &[Module] {
         unsafe { transmute(Slice {

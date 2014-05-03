@@ -32,14 +32,14 @@ pub mod mapflag {
 // memory - it represents each process' wishful thinking about how their memory
 // should look. backings and sharings control physical memory.
 pub struct MapCard {
-	as_node : DictNode<uint, MapCard>,
-	handle : uint,
-	// .vaddr + .offset = handle-offset to be sent to backer on fault
-	// For a direct physical mapping, paddr = .vaddr + .offset
-	// .offset = handle-offset - vaddr
-	// .offset = paddr - .vaddr
-	// The low 12 bits contain flags.
-	offset : uint,
+    as_node : DictNode<uint, MapCard>,
+    handle : uint,
+    // .vaddr + .offset = handle-offset to be sent to backer on fault
+    // For a direct physical mapping, paddr = .vaddr + .offset
+    // .offset = handle-offset - vaddr
+    // .offset = paddr - .vaddr
+    // The low 12 bits contain flags.
+    offset : uint,
 }
 
 impl DictItem<uint> for MapCard {
@@ -77,15 +77,15 @@ impl MapCard {
 // table. Flags could indicate how many levels that are required, and e.g. a
 // very small process could have only one level, and map 128 pages at 0..512kB.
 pub struct Backing {
-	// Flags stored in low bits of vaddr!
-	vaddr : uint,
-	as_node : DictNode<uint, Backing>,
-	// Pointer to parent sharing. Needed to unlink self when unmapping.
-	// Could have room for flags (e.g. to let it be a paddr when we don't
-	// need the parent - we might have a direct physical address mapping)
-	parent : *mut Sharing,
-	// Space to participate in parent's list of remappings.
-	child_node : DListNode<Backing>
+    // Flags stored in low bits of vaddr!
+    vaddr : uint,
+    as_node : DictNode<uint, Backing>,
+    // Pointer to parent sharing. Needed to unlink self when unmapping.
+    // Could have room for flags (e.g. to let it be a paddr when we don't
+    // need the parent - we might have a direct physical address mapping)
+    parent : *mut Sharing,
+    // Space to participate in parent's list of remappings.
+    child_node : DListNode<Backing>
 }
 
 impl DictItem<uint> for Backing {
@@ -97,11 +97,11 @@ impl DictItem<uint> for Backing {
 // sharing: mapping one page to every place it's been shared to
 // 7 words!
 pub struct Sharing {
-	vaddr : uint,
-	as_node : DictNode<uint, Sharing>,
-	paddr : uint,
-	aspace : *mut AddressSpace,
-	children : DList<Backing>,
+    vaddr : uint,
+    as_node : DictNode<uint, Sharing>,
+    paddr : uint,
+    aspace : *mut AddressSpace,
+    children : DList<Backing>,
 }
 
 impl DictItem<uint> for Sharing {
@@ -113,32 +113,32 @@ impl DictItem<uint> for Sharing {
 type PML4 = [u64, ..512];
 
 pub struct AddressSpace {
-	// Upon setup, pml4 is set to a freshly allocated frame that is empty
-	// except for the mapping to the kernel memory area (which, as long as
-	// it's less than 4TB is only a single entry in the PML4).
-	// (This is the virtual address in the higher half. proc.cr3 is a
-	// physical address.)
-	pml4 : *mut [u64, ..512],
-	count : uint,
-	// Do we need a list of processes that share an address space?
-	// (That would remove the need for .count, I think.)
-	//.procs	resq 1
-//	.handles	restruc dict
-//	.pending	restruc dict
+    // Upon setup, pml4 is set to a freshly allocated frame that is empty
+    // except for the mapping to the kernel memory area (which, as long as
+    // it's less than 4TB is only a single entry in the PML4).
+    // (This is the virtual address in the higher half. proc.cr3 is a
+    // physical address.)
+    pml4 : *mut [u64, ..512],
+    count : uint,
+    // Do we need a list of processes that share an address space?
+    // (That would remove the need for .count, I think.)
+    //.procs    resq 1
+//  .handles    restruc dict
+//  .pending    restruc dict
 
-	mapcards : Dict<MapCard>,
-	backings : Dict<Backing>,
-	sharings : Dict<Sharing>
+    mapcards : Dict<MapCard>,
+    backings : Dict<Backing>,
+    sharings : Dict<Sharing>
 }
 
 fn alloc_pml4() -> *mut PML4 {
-	let res : *mut PML4 = cpu().memory.alloc_frame_panic();
-	// Copy a reference to the kernel memory range into the new PML4.
-	// Since this currently is at most one 4TB range, this is easy: only a
-	// single PML4 entry maps everything by sharing the kernel's lower
-	// page tables between all processes.
-	unsafe { (*res)[511] = start32::kernel_pdp_addr() | 3; }
-	return res;
+    let res : *mut PML4 = cpu().memory.alloc_frame_panic();
+    // Copy a reference to the kernel memory range into the new PML4.
+    // Since this currently is at most one 4TB range, this is easy: only a
+    // single PML4 entry maps everything by sharing the kernel's lower
+    // page tables between all processes.
+    unsafe { (*res)[511] = start32::kernel_pdp_addr() | 3; }
+    return res;
 }
 
 fn heap_copy<T>(x : T) -> *mut T {
@@ -150,20 +150,20 @@ fn heap_copy<T>(x : T) -> *mut T {
 }
 
 impl AddressSpace {
-	pub fn new() -> AddressSpace {
-		AddressSpace {
-			pml4 : alloc_pml4(),
-			count : 1,
-			mapcards : Dict::empty(),
-			backings : Dict::empty(),
-			sharings : Dict::empty()
-		}
-	}
+    pub fn new() -> AddressSpace {
+        AddressSpace {
+            pml4 : alloc_pml4(),
+            count : 1,
+            mapcards : Dict::empty(),
+            backings : Dict::empty(),
+            sharings : Dict::empty()
+        }
+    }
 
-	pub fn cr3(&self) -> uint {
-		let vaddr : *PML4 = unsafe { transmute(self.pml4) };
-		return vaddr as uint - start32::kernel_base;
-	}
+    pub fn cr3(&self) -> uint {
+        let vaddr : *PML4 = unsafe { transmute(self.pml4) };
+        return vaddr as uint - start32::kernel_base;
+    }
 
     pub fn mapcard_find<'a>(&'a mut self, vaddr : uint) -> Option<&'a mut MapCard> {
         match self.mapcards.find(vaddr) {
