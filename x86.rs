@@ -21,6 +21,12 @@ pub unsafe fn ltr(tr : uint) {
 	asm!("ltr %ax" :: "{ax}"(tr));
 }
 
+pub fn cr2() -> uint {
+    let mut cr2 : uint;
+    unsafe { asm!("mov %cr2, $0": "=r" (cr2)); }
+    return cr2;
+}
+
 pub mod seg {
 	#![allow(dead_code)]
 	pub static code32 : uint = 8;
@@ -89,10 +95,21 @@ pub unsafe fn load(table: *[Entry, ..49]) {
 	lidt(&idtr);
 }
 
-pub unsafe fn init() {
-	use handler_PF;
+#[no_mangle]
+pub fn irq_entry(vec : u8, err : uint) {
+	use page_fault;
 	use handler_NM;
 	use generic_irq_handler;
+    if vec == 7 {
+        handler_NM();
+    } else if vec == 14 {
+        page_fault(err);
+    } else if vec >= 32 {
+        generic_irq_handler(vec);
+    }
+}
+
+pub unsafe fn init() {
 	extern {
 		fn handler_PF_stub();
 		fn handler_NM_stub();

@@ -18,7 +18,7 @@ CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 LDFLAGS = --check-sections --gc-sections
 OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
-OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64,syscall -internalize
+OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=start64,syscall,irq_entry -internalize
 RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 
 all: $(OUT)/kernel $(OUT)/kernel.elf $(OUT)/grub.iso
@@ -72,7 +72,7 @@ $(OUT)/%.o: %.s
 $(OUT)/%.o: %.asm
 	@mkdir -p $(@D)
 	$(YASM) -i . -e -M $< -o $@ > $(@:.o=.d)
-	$(YASM) -i . -f elf64 -g dwarf2 $< -o $@ -L nasm -l $(OUT)/$*.lst
+	$(YASM) -i . -f elf64 -g dwarf2 -Werror $< -o $@ -L nasm -l $(OUT)/$*.lst
 
 # Keep it around after building the .o file
 .PRECIOUS: amalgam.s

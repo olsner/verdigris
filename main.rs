@@ -22,6 +22,7 @@ use start32::PhysAddr;
 use start32::MutPhysAddr;
 use util::abort;
 use x86::idt;
+pub use x86::idt::irq_entry;
 
 mod aspace;
 #[allow(dead_code)]
@@ -69,7 +70,15 @@ fn writeMBInfo(infop : *mboot::Info) {
 pub fn generic_irq_handler(_vec : u8) {
 }
 
-pub fn handler_PF(_error : u64) {
+pub fn page_fault(error : uint) {
+    write("page fault ");
+    con::writeHex(error);
+    write(" cr2=");
+    con::writePHex(x86::cr2());
+    write(" in process ");
+    con::writeMutPtr(unsafe { cpu().get_process() });
+    con::newline();
+    abort();
 }
 
 pub fn handler_NM() {
@@ -83,7 +92,9 @@ pub struct PerCpu {
 	selfp : *mut PerCpu,
 	// Just after syscall entry, this will actually be the user process' rsp.
 	stack : *mut u8,
-	process : *mut Process,
+	process : Option<&'static mut Process>,
+
+    // End of assembly-fixed fields.
 	memory : mem::PerCpu,
 	runqueue : DList<Process>,
 }
@@ -96,7 +107,7 @@ impl PerCpu {
 			stack : mem::global.alloc_frame_panic(),
 			memory : mem::PerCpu::new(),
 			runqueue : DList::empty(),
-			process : RawPtr::null()
+			process : None
 		};
 		return p
 	}
@@ -119,13 +130,13 @@ impl PerCpu {
 		}
 	}
 
-	unsafe fn switch_to(&mut self, p: &mut Process) -> ! {
+	unsafe fn switch_to(&mut self, p: &'static mut Process) -> ! {
 		write("switch_to ");
 		con::writeMutPtr(p as *mut Process);
 		con::newline();
 		p.unset(process::Queued);
 		p.set(process::Running);
-		self.process = p as *mut Process;
+		self.process = transmute(p as *mut Process);
 		// TODO Check fpu_process, see if we need to set/reset TS bit in cr0
 		// This breaks:
 		x86::set_cr3(p.cr3);
@@ -143,13 +154,21 @@ impl PerCpu {
 			slowret(p);
 		}
 	}
+
+    #[inline(never)]
+    unsafe fn get_process<'a>(&self) -> &'a mut Process {
+        &mut **(&self.process as *Option<&'static mut Process> as *Option<&'a mut Process> as **mut Process)
+    }
+
+    unsafe fn switch_back(&mut self) -> ! {
+        let p = self.get_process();
+        self.switch_to(p);
+    }
 }
 
 // NB: One of the funky guarantees that Rust gives/requires is that there is
 // at most one &mut reference to the same thing at any one time. This function
 // can't quite guarantee that...
-// This function also returns garbage as long as PerCpu::new doesn't fill in
-// the selfp pointer.
 pub fn cpu() -> &mut PerCpu {
 	unsafe {
 		let mut ret = 0;
@@ -325,12 +344,12 @@ pub unsafe fn start64() -> ! {
 	mem::global.stat();
 
 	let pcpu = PerCpu::new();
-	let &mut cpu = &*pcpu;
+	let ref mut cpu = *pcpu;
 	cpu.start();
 	cpu.memory.test();
 	mem::global.stat();
 
-	init_modules(&mut cpu);
+	init_modules(cpu);
 
 //	let mut i = 0;
 //	loop {
