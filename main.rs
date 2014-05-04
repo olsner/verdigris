@@ -23,6 +23,7 @@ use start32::MutPhysAddr;
 use util::abort;
 use x86::idt;
 pub use x86::idt::irq_entry;
+pub use syscall::syscall;
 
 mod aspace;
 #[allow(dead_code)]
@@ -33,6 +34,7 @@ mod mboot;
 mod mem;
 mod process;
 mod start32;
+mod syscall;
 mod util;
 mod x86;
 
@@ -229,31 +231,6 @@ pub fn free(p : *mut u8) {
     if p.is_not_null() {
         cpu().memory.free_frame(p);
     }
-}
-
-// Note: tail-called from the syscall code, "return" by switching to a process.
-#[no_mangle]
-pub fn syscall(
-    arg0: uint,
-    arg1: uint,
-    arg2: uint,
-    arg3: uint,
-    arg4: uint,
-    arg5: uint,
-    nr : uint, // saved_rax
-) -> ! {
-    let c = cpu();
-    let p = unsafe { c.get_process() };
-    p.unset(process::Running);
-    p.set(process::FastRet);
-
-    write("syscall! nr=");
-    con::writeUInt(nr);
-    write(" from process ");
-    con::writeMutPtr(p);
-    con::newline();
-
-    unsafe { c.run(); }
 }
 
 unsafe fn setup_msrs(gs : uint) {
