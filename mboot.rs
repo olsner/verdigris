@@ -108,6 +108,7 @@ impl Info {
     }
 }
 
+#[allow(dead_code)] // Spurious dead-code warning?
 pub struct Module {
     pub start   : u32,
     pub end     : u32,

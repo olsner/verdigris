@@ -1,4 +1,4 @@
-use core::prelude::*;
+//use core::prelude::*;
 
 use con;
 use con::write;
@@ -8,16 +8,17 @@ use process;
 // Note: tail-called from the syscall code, "return" by switching to a process.
 #[no_mangle]
 pub fn syscall(
-    arg0: uint,
-    arg1: uint,
-    arg2: uint,
-    arg3: uint,
-    arg4: uint,
-    arg5: uint,
+    _arg0: uint,
+    _arg1: uint,
+    _arg2: uint,
+    _arg3: uint,
+    _arg4: uint,
+    _arg5: uint,
     nr : uint, // saved_rax
 ) -> ! {
     let c = cpu();
     let p = unsafe { c.get_process() };
+    // FIXME cpu.leave_proc?
     p.unset(process::Running);
     p.set(process::FastRet);
 

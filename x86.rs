@@ -46,7 +46,6 @@ pub mod idt {
 
 use core::prelude::*;
 
-use process::Process;
 use x86::seg;
 use x86::Idtr;
 use x86::lidt;
@@ -65,22 +64,11 @@ pub fn entry(handler_ptr : *u8) -> Entry {
 
 pub static null_entry : Entry = (0,0);
 
-pub enum Handler {
-    Ignore,
-    Error(fn(u64)),
-    NoError(fn()),
-    IRQ(fn(u8)),
-}
-
-impl Handler {
-}
-
 pub type BuildEntry = (u8, extern "C" unsafe fn());
 pub type Entry = (u64,u64);
 pub type Table = [Entry, ..49];
 
 pub fn build(target : &mut [Entry, ..49], entries : &[BuildEntry]) {
-    let table_size : uint = 49;
     for &(vec,handler) in entries.iter() {
         target[vec as uint] = entry(handler as *u8);
     }
@@ -103,7 +91,7 @@ pub fn irq_entry(vec : u8, err : uint) -> ! {
     use handler_NM;
     use generic_irq_handler;
     use cpu;
-    unsafe { cpu().leave_proc(); }
+    cpu().leave_proc();
     let p = unsafe { cpu().get_process() };
     if vec == 7 {
         handler_NM();

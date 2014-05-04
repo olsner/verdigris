@@ -4,6 +4,7 @@ use con::Writer;
 
 mod detail {
 #[no_mangle]
+#[allow(dead_code)]
 fn abort() -> ! {
     use util;
     util::abort("aborted.");

@@ -150,13 +150,6 @@ impl Global {
         }
     }
 
-    pub fn alloc_frame_panic(&mut self) -> *mut u8 {
-        match self.alloc_frame() {
-            Some(page) => page as *mut u8,
-            None => abort("OOM")
-        }
-    }
-
     pub fn free_pages(&self) -> uint {
         self.num_total - self.num_used
     }
@@ -248,3 +241,13 @@ impl PerCpu {
         }
     }
 }
+
+pub fn heap_copy<T>(x : T) -> *mut T {
+    use alloc;
+    unsafe {
+        let res : *mut T = alloc();
+        *res = x;
+        return res;
+    }
+}
+

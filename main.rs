@@ -77,14 +77,15 @@ pub fn generic_irq_handler(p : &mut Process, vec : u8) {
 }
 
 pub fn page_fault(p : &mut Process, error : uint) -> ! {
-    use aspace::mapflag;
-    use aspace::mapflag::*;
-
-    static PRESENT : uint = 1;
-    static WRITE : uint = 2;
-    static USER : uint = 4;
-    static RSVD : uint = 8;
-    static INSTR : uint = 16;
+    mod pf_errors {
+        #![allow(dead_code)]
+        // Error code flags.
+        pub static PRESENT : uint = 1;
+        pub static WRITE : uint = 2;
+        pub static USER : uint = 4;
+        pub static RSVD : uint = 8;
+        pub static INSTR : uint = 16;
+    }
 
     write("page fault ");
     con::writeHex(error);
@@ -96,7 +97,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
     con::writeMutPtr(p);
     con::newline();
 
-    if (error & USER) == 0 {
+    if (error & pf_errors::USER) == 0 {
         abort("kernel page fault\n");
     }
 

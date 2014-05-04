@@ -23,7 +23,6 @@ pub trait DictItem<K> {
     // single copy of the linking code.
 }
 
-pub fn not_null<U, T : RawPtr<U>>(p : T) -> bool { p.is_not_null() }
 fn null<T>() -> *mut T { RawPtr::null() }
 fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
     unsafe { (*p).node() }

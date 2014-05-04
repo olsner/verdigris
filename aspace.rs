@@ -3,13 +3,12 @@ use core::mem::transmute;
 
 use con;
 use con::write;
+use cpu;
 use dict::*;
 use dlist::*;
-use cpu;
+use mem::heap_copy;
 use start32;
 use util::abort;
-
-use alloc;
 
 pub mod mapflag {
     pub static X : uint = 1;
@@ -22,6 +21,7 @@ pub mod mapflag {
     pub static Phys : uint = 16;
     // Physical memory allocated and locked at map time; and deallocated when
     // unmapped.
+    #[allow(dead_code)] // TODO: Implement DMA-mappings and use.
     pub static DMA : uint = Anon | Phys;
 }
 
@@ -110,6 +110,12 @@ impl DictItem<uint> for Backing {
     }
 }
 
+impl DListItem for Backing {
+    fn node<'a>(&'a mut self) -> &'a mut DListNode<Backing> {
+        return &mut self.child_node;
+    }
+}
+
 fn alloc_frame_paddr() -> uint {
     let p : *mut u8 = cpu().memory.alloc_frame_panic();
     p as uint - start32::kernel_base
@@ -148,7 +154,7 @@ impl Backing {
         let mut pte = 5; // Present, User-accessible
         if (flags & mapflag::X) == 0 {
             // Set bit 63 to *disable* execute permission
-            pte |= (1 << 63);
+            pte |= 1 << 63;
         }
         if (flags & mapflag::W) != 0 {
             pte |= 2;
@@ -168,7 +174,6 @@ impl Backing {
 // sharing: mapping one page to every place it's been shared to
 // 7 words!
 pub struct Sharing {
-    vaddr : uint,
     as_node : DictNode<uint, Sharing>,
     paddr : uint,
     aspace : *mut AddressSpace,
@@ -226,14 +231,6 @@ fn get_alloc_pt(table : *mut PML4, index : uint, flags : uint) -> *mut PageTable
     }
 }
 
-fn heap_copy<T>(x : T) -> *mut T {
-    unsafe {
-        let res : *mut T = alloc();
-        *res = x;
-        return res;
-    }
-}
-
 impl AddressSpace {
     pub fn new() -> AddressSpace {
         AddressSpace {
@@ -255,7 +252,6 @@ impl AddressSpace {
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
-        // insert(vaddr).set(card)?
         self.mapcards.insert(heap_copy(*card));
     }
 
@@ -329,7 +325,6 @@ impl AddressSpace {
         write(" to ");
         con::writePHex(pte);
         con::newline();
-        let flags = pte & 0xfff;
         let pdp = get_alloc_pt(self.pml4, vaddr >> 39, 7);
         let pd = get_alloc_pt(pdp, vaddr >> 30, 7);
         let pt = get_alloc_pt(pd, vaddr >> 21, 7);
