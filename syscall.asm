@@ -111,7 +111,6 @@ gfunc %$LAST_PROC
 %endmacro
 
 proc fastret
-	swapgs
 	zero	edx
 	zero	r8
 	zero	r9
@@ -127,6 +126,7 @@ proc fastret
 	mov	rcx, [rdi + proc.rip]
 	mov	r11, [rdi + proc.rflags]
 	mov	rax, rsi
+	swapgs
 	o64 sysret
 .wrong_cr3:
 	ud2
@@ -136,8 +136,7 @@ endproc
 ; syscall_entry_stub:
 proc syscall_entry_stub
 	swapgs
-	; FIXME I think we have clobberable registers here, use them
-	xchg [gs:8], rsp
+	xchg	[gs:8], rsp
 	push	rax
 	zero	eax
 	mov	rax, [gs:rax + gseg.proc]
@@ -150,15 +149,24 @@ proc syscall_entry_stub
 	; * Save rip and rflags
 	mov	[rax + proc.rflags], r11
 	mov	[rax + proc.rip], rcx
+	zero	rcx
+	mov	rbp, [gs:rcx + gseg.self]
+	mov	rcx, [rbp + gseg.rsp]
+	mov	[rax + proc.rsp], rcx
+	lea	rcx, [rsp + 8]
+	mov	[rbp + gseg.rsp], rcx
 	; * Fix up for syscall vs normal calling convention.
 	;   r10 (caller-save) is used instead of rcx for argument 4
 	mov	rcx, r10
 
 	; The syscall function's prototype is:
-	; fn(rdi,rsi,rdx,r10,r8,r9,  rip)
+	; fn(rdi,rsi,rdx,r10,r8,r9,  rax)
 
+	; Need to use call since we have one stack-allocated register (rax)
+	; But note that we do *not* expect syscall to return here - in that
+	; case fall through to the ud2 below.
 	extern syscall
-	jmp syscall
+	call syscall
 
 proc syscall_entry_compat, NOSECTION
 	; Fail
@@ -224,34 +232,56 @@ combine EXC_ERR_MASK, 8, 10, 11, 12, 13, 14, 17
 ; save rip, rflags, rsp to process
 ; save all caller-save regs to process
 proc handle_irq_generic, NOSECTION
+	push	rsi
+	lea	rsi, [rsp + 8]
+	push	rdi
 	push	rax
-	zero	eax
+
+	; Set flags to a known state. Must be done before lodsq in case someone
+	; set the direction flag.
+	push	byte 0
+	popfq
+
+	; rsp is always 16-byte aligned before pushing the stack frame, the
+	; basic interrupt stack frame is 5 qwords (making it misaligned), we
+	; always add a vector (aligning it again), and sometimes add another
+	; error making it misaligned.
+	; rsi is the original stack pointer on entry.
+	; I.e. test esi,8 => nz if we have an error.
+	lodsq
+	mov	edi, eax
+	; We removed the vector above, so the parity we're checking is flipped.
+	test	esi, 8
+	cond	z, lodsq
+
+	; edi = vector
+	; rax = error (if applicable, otherwise garbage)
+	; rsi = frame
+
+	; If we came from privilege level 0, this is some sort of kernel
+	; fault.
+	test	byte [rsi + iframe.cs], 3
+	jz	.kernel_fault
+
 	swapgs
+	zero	eax
 	mov	rax, [gs:rax + gseg.proc]
 	pop	qword [rax - proc + proc.rax] ; The rax saved on entry
 	sub	rax, proc
-	mov	[rax + proc.rdx], rdx
-	mov	[rax + proc.rdi], rdi
-	mov	[rax + proc.rsi], rsi
-	pop	rdi ; vector
-	zero	esi ; error (0 if no code for exception)
-
-	cmp	edi, byte 32
-	jae	.no_err
-	mov	edx, EXC_ERR_MASK
-	bt	edx, edi
-	cond c, pop rsi
+	pop	qword [rax + proc.rdi]
+	pop	qword [rax + proc.rsi]
+	mov	rsp, rsi ; skip stuff
+	mov	edi, [rsi - 8]
+	test	esi, 8
+	jz	.no_err
+	mov	esi, [rsi - 16]
+	xchg	edi, esi
 .no_err:
 
-	; could use a register, but that's boring (and larger code)
-%macro save_iframe 1-*
-%rep %0
-	%rotate 1
-	push	qword [rsp + iframe. %+ %1]
-	pop	qword [rax + proc. %+ %1]
-%endrep
-%endmacro
-	save_iframe rip, rflags, rsp
+	pop	qword [rax + proc.rip]
+	add	rsp, 8 ; cs
+	pop	qword [rax + proc.rflags]
+	pop	qword [rax + proc.rsp]
 
 	; already saved: ax, dx, di, si
 	; caller-save: rax, rcx, rdx, rsi, rdi, r8-r11
@@ -260,13 +290,13 @@ proc handle_irq_generic, NOSECTION
 	save_regs rax,  rcx,r8,r9,r10,r11
 	save_regs rax,  rbp,rbx,r12,r13,r14,r15
 
-	; Set flags to a known state.
-	push	byte 0
-	popfq
-
 	; Now rdi = vector, rsi = error (or 0)
 	extern	irq_entry
 	jmp	irq_entry
+
+.kernel_fault:
+	cli
+	hlt
 
 ; slowret: all registers are currently unknown, load *everything* from process
 ; (in rdi), then iretq

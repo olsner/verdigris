@@ -2,11 +2,19 @@ use start32::kernel_base;
 use con::Console;
 use con::Writer;
 
+mod detail {
 #[no_mangle]
-pub fn abort() -> ! {
+fn abort() -> ! {
+    use util;
+    util::abort("aborted.");
+}
+}
+
+pub fn abort(s : &str) -> ! {
     unsafe {
         let mut con = Console::new((kernel_base + 0xb8000) as *mut u16, 80, 25);
-        con.write("aborted.");
+        con.color = 0x4f00;
+        con.write(s);
         loop {
         asm!("cli; hlt");
         }

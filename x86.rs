@@ -104,12 +104,13 @@ pub fn irq_entry(vec : u8, err : uint) -> ! {
     use generic_irq_handler;
     use cpu;
     unsafe { cpu().leave_proc(); }
+    let p = unsafe { cpu().get_process() };
     if vec == 7 {
         handler_NM();
     } else if vec == 14 {
-        page_fault(err);
+        page_fault(p, err);
     } else if vec >= 32 {
-        generic_irq_handler(vec);
+        generic_irq_handler(p, vec);
     }
     unsafe { cpu().run(); }
 }

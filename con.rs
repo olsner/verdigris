@@ -122,7 +122,7 @@ pub struct Console {
     position : uint,
     width : uint,
     height : uint,
-    color : u16
+    pub color : u16
 }
 
 pub fn init(buffer : *mut u16, width : uint, height : uint) {

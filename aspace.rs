@@ -62,7 +62,7 @@ impl MapCard {
     }
 
     pub fn paddr(&self, vaddr : uint) -> uint {
-        return (vaddr - self.vaddr()) + self.offset;
+        return vaddr + (self.offset & !0xfff);
     }
 
     pub fn flags(&self) -> uint {
@@ -105,11 +105,27 @@ impl DictItem<uint> for Backing {
     }
 }
 
+fn alloc_frame_paddr() -> uint {
+    let p : *mut u8 = cpu().memory.alloc_frame_panic();
+    p as uint - start32::kernel_base
+}
+
 impl Backing {
     fn new_phys(vaddrFlags : uint, phys_addr : uint) -> Backing {
+        if phys_addr & 0xfff != 0 {
+            abort("Bad physical address in new_phys");
+        }
         Backing {
             as_node: DictNode::new(vaddrFlags),
             parent_paddr : phys_addr,
+            child_node: DListNode::new(),
+        }
+    }
+
+    fn new_anon(vaddrFlags : uint) -> Backing {
+        Backing {
+            as_node: DictNode::new(vaddrFlags | mapflag::Phys),
+            parent_paddr : alloc_frame_paddr(),
             child_node: DListNode::new(),
         }
     }
@@ -139,7 +155,7 @@ impl Backing {
         if (self.flags() & mapflag::Phys) != 0 {
             return self.parent_paddr | self.pte_flags();
         } else {
-            abort();
+            abort("pte: non-physical backings unimplemented");
         }
     }
 }
@@ -160,7 +176,8 @@ impl DictItem<uint> for Sharing {
     }
 }
 
-type PML4 = [u64, ..512];
+type PageTable = [u64, ..512];
+type PML4 = PageTable;
 
 pub struct AddressSpace {
     // Upon setup, pml4 is set to a freshly allocated frame that is empty
@@ -168,7 +185,7 @@ pub struct AddressSpace {
     // it's less than 4TB is only a single entry in the PML4).
     // (This is the virtual address in the higher half. proc.cr3 is a
     // physical address.)
-    pml4 : *mut [u64, ..512],
+    pml4 : *mut PML4,
     count : uint,
     // Do we need a list of processes that share an address space?
     // (That would remove the need for .count, I think.)
@@ -189,6 +206,19 @@ fn alloc_pml4() -> *mut PML4 {
     // page tables between all processes.
     unsafe { (*res)[511] = start32::kernel_pdp_addr() | 3; }
     return res;
+}
+
+fn get_alloc_pt(table : *mut PML4, index : uint, flags : uint) -> *mut PageTable {
+    unsafe {
+        let existing = (*table)[index];
+        if (existing & 1) == 0 {
+            let new : *mut PML4 = cpu().memory.alloc_frame_panic();
+            (*table)[index] = ((new as uint - start32::kernel_base) | flags) as u64;
+            return new;
+        } else {
+            return ((existing & !0xfff) + start32::kernel_base as u64) as *mut PageTable;
+        }
+    }
 }
 
 fn heap_copy<T>(x : T) -> *mut T {
@@ -248,34 +278,41 @@ impl AddressSpace {
         return unsafe { &*b };
     }
 
+    fn add_anon_backing<'a>(&mut self, card : MapCard, vaddr : uint)
+    -> &'a Backing {
+        let b = heap_copy(Backing::new_anon(vaddr | card.flags()));
+        self.backings.insert(b);
+        return unsafe { &*b };
+    }
+
     pub fn find_add_backing<'a>(&mut self, vaddr : uint) -> &'a Backing {
         use aspace::mapflag::*;
         use util::abort;
 
-        /*match self.find_backing(vaddr) {
-            Some(back) => { return back; },
+        /*match self.backings.find(vaddr | 0xfff) {
+            Some(back) => { return &*back; },
             None => ()
         }*/
 
         match self.mapcard_find(vaddr) {
             Some(card) => {
                 if (card.flags() & RWX) == 0 {
-                    write("No access! "); abort();
+                    abort("No access!");
                 }
                 if card.handle == 0 {
                     if (card.flags() & Anon) != 0 {
-                        abort(); // self.add_anon_backing(card, vaddr);
+                        return self.add_anon_backing(*card, vaddr);
                     } else if (card.flags() & Phys) != 0 {
                         return self.add_phys_backing(*card, vaddr);
                     } else {
-                        abort();
+                        abort("not anon or phys for handle==0");
                     }
                 } else {
-                    abort();
+                    abort("user mappings unimplemented");
                 }
             },
             None => {
-                write("No mapping found! "); abort();
+                abort("No mapping found!");
             }
         }
     }
@@ -286,5 +323,10 @@ impl AddressSpace {
         write(" to ");
         con::writePHex(pte);
         con::newline();
+        let flags = pte & 0xfff;
+        let pdp = get_alloc_pt(self.pml4, vaddr >> 39, 7);
+        let pd = get_alloc_pt(pdp, vaddr >> 30, 7);
+        let pt = get_alloc_pt(pd, vaddr >> 21, 7);
+        unsafe { (*pt)[vaddr >> 12] = pte as u64; }
     }
 }

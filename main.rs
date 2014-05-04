@@ -67,10 +67,14 @@ fn writeMBInfo(infop : *mboot::Info) {
     }
 }
 
-pub fn generic_irq_handler(_vec : u8) {
+pub fn generic_irq_handler(p : &mut Process, vec : u8) {
+    write("IRQ! vec=");
+    con::writeUInt(vec as uint);
+    con::newline();
+    cpu().queue(p);
 }
 
-pub fn page_fault(error : uint) {
+pub fn page_fault(p : &mut Process, error : uint) -> ! {
     use aspace::mapflag;
     use aspace::mapflag::*;
 
@@ -79,38 +83,44 @@ pub fn page_fault(error : uint) {
     static USER : uint = 4;
     static RSVD : uint = 8;
     static INSTR : uint = 16;
-    if (error & USER) == 0 {
-        abort();
-    }
-    let p = unsafe { cpu().get_process() };
+
     write("page fault ");
     con::writeHex(error);
     write(" cr2=");
     con::writePHex(x86::cr2());
+    write(" rip=");
+    con::writePHex(p.regs.rip as uint);
     write(" in process ");
     con::writeMutPtr(p);
     con::newline();
 
-    let back = p.aspace().find_add_backing(x86::cr2());
+    if (error & USER) == 0 {
+        abort("kernel page fault\n");
+    }
+
+    let back = p.aspace().find_add_backing(x86::cr2() & !0xfff);
     // FIXME should return e.g. Option<> so we can detect failures better than
     // just aborting.
     p.aspace().add_pte(back.vaddr(), back.pte());
 
-    abort();
+    cpu().queue(p);
+    unsafe { cpu().run(); }
 }
 
 pub fn handler_NM() {
 }
 
 pub fn idle() -> ! {
-    loop { write("idle\n"); unsafe { asm!("hlt"); } }
+    loop {
+        write("idle\n");
+        unsafe { asm!("swapgs; sti; hlt; cli; swapgs" :::: "volatile"); } }
 }
 
 pub struct PerCpu {
     selfp : *mut PerCpu,
-    // Just after syscall entry, this will actually be the user process' rsp.
     stack : *mut u8,
     process : Option<&'static mut Process>,
+    // 
 
     // End of assembly-fixed fields.
     memory : mem::PerCpu,
@@ -119,11 +129,13 @@ pub struct PerCpu {
 
 impl PerCpu {
     unsafe fn new() -> *mut PerCpu {
-        let p = mem::global.alloc_frame_panic() as *mut PerCpu;
+        let mut mem = mem::PerCpu::new();
+        let p : *mut PerCpu = mem.alloc_frame_panic();
+        let stack : *mut u8 = mem.alloc_frame_panic();
         *p = PerCpu {
             selfp : p,
-            stack : mem::global.alloc_frame_panic(),
-            memory : mem::PerCpu::new(),
+            stack : stack,
+            memory : mem,
             runqueue : DList::empty(),
             process : None
         };
@@ -162,12 +174,15 @@ impl PerCpu {
             fn slowret(p : &mut Process) -> !;
         }
         if p.is(process::FastRet) {
+            p.unset(process::FastRet);
             write("fastret to ");
-            con::writeUInt(p.regs.rip as uint);
+            con::writeHex(p.regs.rip as uint);
             con::newline();
             fastret(p);
         } else {
-            write("slowret\n");
+            write("slowret to ");
+            con::writeHex(p.regs.rip as uint);
+            con::newline();
             slowret(p);
         }
     }
@@ -181,6 +196,7 @@ impl PerCpu {
         unsafe {
             let p = self.get_process();
             p.unset(process::Running);
+            //self.process = None;
         }
     }
 }
@@ -199,7 +215,7 @@ pub fn cpu() -> &mut PerCpu {
 #[lang="exchange_malloc"]
 pub fn malloc(size : uint) -> *mut u8 {
     if size > 4096 {
-        abort();
+        abort("oversized malloc");
     }
     return cpu().memory.alloc_frame_panic();
 }
@@ -215,23 +231,29 @@ pub fn free(p : *mut u8) {
     }
 }
 
-// Note: tail-called from the syscall code, return by switching to a process.
+// Note: tail-called from the syscall code, "return" by switching to a process.
 #[no_mangle]
 pub fn syscall(
-    // Parameter list of doom :/ If we fix the relevant bits of the process
-    // struct we can move some of this into the syscall.s asssembly instead.
-
-    // syscall arguments. Quite annoying that rax isn't acessible though.
-    _rdi: uint,
-    _rsi: uint,
-    _rdx: uint,
-    _r10: uint,
-    _r8: uint,
-    _r9: uint,
-    _nr : uint, // saved_rax
+    arg0: uint,
+    arg1: uint,
+    arg2: uint,
+    arg3: uint,
+    arg4: uint,
+    arg5: uint,
+    nr : uint, // saved_rax
 ) -> ! {
-    con::write("syscall!\n");
-    abort();
+    let c = cpu();
+    let p = unsafe { c.get_process() };
+    p.unset(process::Running);
+    p.set(process::FastRet);
+
+    write("syscall! nr=");
+    con::writeUInt(nr);
+    write(" from process ");
+    con::writeMutPtr(p);
+    con::newline();
+
+    unsafe { c.run(); }
 }
 
 unsafe fn setup_msrs(gs : uint) {
@@ -248,6 +270,8 @@ unsafe fn setup_msrs(gs : uint) {
     wrmsr(STAR, (seg::user_code32_base << 16) | seg::code);
     wrmsr(LSTAR, syscall_entry_stub as uint);
     wrmsr(CSTAR, syscall_entry_compat as uint);
+    // FIXME: We want to clear a lot more flags - Direction for instance.
+    // FreeBSD sets PSL_NT|PSL_T|PSL_I|PSL_C|PSL_D
     wrmsr(FMASK, rflags::IF | rflags::VM);
     wrmsr(EFER, rdmsr(EFER) | efer::SCE | efer::NXE);
     wrmsr(GSBASE, gs);
@@ -265,21 +289,27 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     unsafe {
         (*ret).regs.set_rsp(0x100000);
         (*ret).regs.set_rip(0x100000 + (start & 0xfff));
-            write("new_proc rip ");
-            con::writePHex((*ret).regs.rip as uint);
-            con::newline();
     }
 
     unsafe {
         use aspace::mapflag::*;
-        // Stack at 1MB - kB (not executable)
+        // Stack at 1MB - 4kB (not executable)
         (*aspace).mapcard_set(0x0ff000, 0, 0, Anon | R | W);
         (*aspace).mapcard_set(0x100000, 0, start_page - 0x100000, Phys | R | X);
         (*aspace).mapcard_set(0x100000 + (end - start_page), 0, 0, 0);
+        /*match (*ret).aspace().mapcard_find(0x100000) {
+            Some(c) => {
+                write("0x100000: ");
+                con::writePHex(c.vaddr());
+                write(" -> paddr ");
+                con::writePHex(c.paddr(0x100000));
+                con::newline();
+            },
+            None => {
+                abort("mapcard we added is not there anymore");
+            }
+        }*/
     }
-    write("new_proc rip ");
-    con::writeUInt(unsafe { (*ret).regs.rip as uint });
-    con::newline();
     return ret;
 }
 

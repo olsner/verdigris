@@ -34,7 +34,7 @@ CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir rus
 
 $(OUT)/kernel: SHELL=/bin/bash
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
-	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^
+	$(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^ -Map $(@:.elf=.map)
 	@echo $@: `grep fill $(@:.elf=.map) | tr -s ' ' | cut -d' ' -f4 | while read REPLY; do echo $$[$$REPLY]; done | paste -sd+ | bc` bytes wasted on alignment
 $(OUT)/kernel: $(OUT)/kernel.elf
 	objcopy -O binary $< $@
@@ -102,11 +102,12 @@ $(GRUB_CFG): mkgrubcfg.sh
 	@mkdir -p $(@D)
 	bash $< > $@
 
-$(GRUBDIR)/test.mod:
-	echo -e '\x0f\x05' > $@
+$(GRUBDIR)/test.mod: SHELL=/bin/bash
+$(GRUBDIR)/test.mod: test.asm
+	$(YASM) -f bin -L nasm -Werror -o $@ $<
 
 $(GRUBDIR)/kernel: $(OUT)/kernel
-	cp -v $< $@
+	@cp -v $< $@
 
 $(OUT)/grub.iso: $(GRUB_CFG) $(GRUBDIR)/kernel $(GRUBDIR)/test.mod
 	@echo Creating grub boot image $@ from $^

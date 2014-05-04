@@ -40,9 +40,15 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         let mut max = null();
         while item.is_not_null() {
             let ikey : K = node(item).key;
-            let maxKey : K = node(max).key;
-            if ikey <= key && (max.is_null() || maxKey < ikey) {
-                max = item;
+            if ikey <= key {
+                if max.is_null() {
+                    max = item;
+                } else {
+                    let maxKey : K = node(max).key;
+                    if maxKey < ikey {
+                        max = item;
+                    }
+                }
             }
             item = node(item).right;
         }

@@ -153,7 +153,7 @@ impl Global {
     pub fn alloc_frame_panic(&mut self) -> *mut u8 {
         match self.alloc_frame() {
             Some(page) => page as *mut u8,
-            None => abort()
+            None => abort("OOM")
         }
     }
 
@@ -205,7 +205,7 @@ impl PerCpu {
     pub fn alloc_frame_panic<T>(&mut self) -> *mut T {
         match self.alloc_frame() {
             Some(page) => page as *mut T,
-            None => abort()
+            None => abort("OOM")
         }
     }
 
