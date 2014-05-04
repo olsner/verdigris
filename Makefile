@@ -64,12 +64,8 @@ $(OUT)/kernel: $(OUT)/kernel.elf
 
 -include $(OUT)/syscall.d
 
-ifdef CFG
-$(OUT)/main.bc: RUSTCFLAGS += --cfg $(CFG)
-endif
-
 $(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
-	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) --crate-type=lib --emit=bc -L. -L $(OUT)/rust-core -o $@ $<
+	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=bc -L. -L $(OUT)/rust-core -o $@ $<
 
 -include $(OUT)/main.d
 

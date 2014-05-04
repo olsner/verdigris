@@ -163,7 +163,7 @@ impl PerCpu {
         }
     }
 
-    unsafe fn switch_to(&mut self, p: &'static mut Process) -> ! {
+    unsafe fn switch_to(&mut self, p: &mut Process) -> ! {
         write("switch_to ");
         con::writeMutPtr(p as *mut Process);
         con::newline();
@@ -188,6 +188,11 @@ impl PerCpu {
             con::newline();
             slowret(p);
         }
+    }
+
+    fn syscall_return(&mut self, p: &mut Process, rax : uint) -> ! {
+        p.regs.set_rax(rax);
+        unsafe { self.switch_to(p); }
     }
 
     #[inline(never)]

@@ -59,6 +59,12 @@ pub trait Writer {
         self.writeUnsigned(16, true, 16, true, x);
     }
 
+    #[cfg(no_console)]
+    fn writeUnsigned(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint) {
+        // nothing
+    }
+
+    #[cfg(not(no_console))]
     fn writeUnsigned(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint)
     {
         if show_base && base == 16 {

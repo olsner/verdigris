@@ -4,6 +4,8 @@ use aspace::AddressSpace;
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
+use dict::*;
+use mem::heap_copy;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -51,6 +53,46 @@ pub struct FXSaveRegs {
     space : [u8, ..512]
 }
 
+pub struct Handle {
+    node : DictNode<uint, Handle>,
+    pub process : *mut Process,
+    // pointer to other handle if any. Its 'key' field is the other-name that
+    // we need when e.g. sending it a message. If null this is not associated
+    // in other-proc yet.
+    other : Option<*mut Handle>,
+    events : uint,
+}
+
+impl DictItem<uint> for Handle {
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Handle> {
+        &mut self.node
+    }
+}
+
+impl Handle {
+    pub fn new(id : uint, process : *mut Process) -> Handle {
+        Handle {
+            node : DictNode::new(id),
+            process : process,
+            other : None,
+            events : 0
+        }
+    }
+
+    pub fn id(&self) -> uint { self.node.key }
+}
+
+pub struct PendingPulse {
+    node : DictNode<uint, PendingPulse>,
+    handle : *mut Handle,
+}
+
+impl DictItem<uint> for PendingPulse {
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, PendingPulse> {
+        return &mut self.node;
+    }
+}
+
 impl FXSaveRegs {
     fn new() -> FXSaveRegs {
         FXSaveRegs { space : [0, ..512] }
@@ -86,6 +128,9 @@ impl Regs {
     pub fn set_rip(&mut self, rip : uint) {
         self.rip = rip as u64;
     }
+    pub fn set_rax(&mut self, rax: uint) {
+        self.gps[RAX as uint] = rax as u64;
+    }
 }
 
 type Flags = uint;
@@ -107,6 +152,11 @@ pub struct Process {
     node : DListNode<Process>,
 
     aspace : *mut AddressSpace,
+
+    // TODO: move this into address space so handles can be shared between
+    // threads.
+    handles : Dict<Handle>,
+    pending : Dict<PendingPulse>,
 
     // When PROC_PFAULT is set, the virtual address that faulted.
     // Note that we lose a lot of data about the mapping that we looked up
@@ -136,6 +186,8 @@ impl Process {
             node : DListNode::new(),
             cr3 : unsafe { (*aspace).cr3() },
             aspace : aspace,
+            handles : Dict::empty(),
+            pending : Dict::empty(),
             fault_addr : 0,
             fxsave : FXSaveRegs::new()
         }
@@ -161,5 +213,30 @@ impl Process {
         unsafe {
             return &mut *self.aspace;
         }
+    }
+
+    pub fn find_handle<'a>(&mut self, id : uint) -> Option<&'a mut Handle> {
+        let res = self.handles.find(id);
+        match res {
+            Some(ref h) if h.id() != id => None,
+            _ => res
+        }
+    }
+
+    pub fn new_handle(&mut self, id : uint, other : *mut Process) {
+        match self.handles.find(id) {
+            Some(ref h) if h.id() != id => (),
+            Some(h) => self.delete_handle(h),
+            None => ()
+        }
+        self.handles.insert(heap_copy(Handle::new(id, other)));
+    }
+
+    pub fn delete_handle(&mut self, handle : &mut Handle) {
+    }
+
+    pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
+        handle.node.key = new_id;
+        // TODO self.handles.unlink/relink/key_changed
     }
 }
