@@ -72,6 +72,11 @@ impl MapCard {
     fn same_addr(&self, other : &MapCard) -> bool {
         self.vaddr() == other.vaddr()
     }
+
+    fn set(&mut self, other : &MapCard) {
+        self.handle = other.handle;
+        self.offset = other.offset;
+    }
 }
 
 // backing: mapping *one page* to the place that page came from.
@@ -250,6 +255,7 @@ impl AddressSpace {
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
+        // insert(vaddr).set(card)?
         self.mapcards.insert(heap_copy(*card));
     }
 
@@ -262,7 +268,7 @@ impl AddressSpace {
         match self.mapcard_find(new.vaddr()) {
             Some(card) => {
                 if card.same_addr(new) {
-                    *card = *new;
+                    card.set(new);
                     return;
                 }
             },

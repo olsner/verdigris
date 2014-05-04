@@ -54,6 +54,7 @@ pub trait Writer {
     fn writeMutPtr<T>(&mut self, x : *mut T) {
         self.writePHex(x as uint);
     }
+    #[inline(never)]
     fn writePHex(&mut self, x : uint) {
         self.writeUnsigned(16, true, 16, true, x);
     }
