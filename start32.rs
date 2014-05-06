@@ -5,13 +5,17 @@ use x86;
 
 extern {
     static mbi_pointer : u32;
-    pub static memory_start : u32;
+    static memory_start : u32;
     //static orig_mbi_pointer : u32;
     static gdtr : x86::Gdtr;
     static kernel_pdp : [u64, ..512];
 }
 
 pub static kernel_base : uint = - (1 << 30);
+
+pub fn HighAddr<T>(obj : &T) -> &T {
+    unsafe { &*PhysAddr(obj as *T as uint) }
+}
 
 pub fn MutPhysAddr<T>(addr : uint) -> *mut T {
     (addr + kernel_base) as *mut T
@@ -22,7 +26,11 @@ pub fn PhysAddr<T>(addr : uint) -> *T {
 }
 
 pub fn MultiBootInfo() -> &'static mboot::Info {
-    unsafe { &*PhysAddr(mbi_pointer as uint) }
+    unsafe { &*PhysAddr(*HighAddr(&mbi_pointer) as uint) }
+}
+
+pub fn MemoryStart() -> uint {
+    *HighAddr(&memory_start) as uint
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {

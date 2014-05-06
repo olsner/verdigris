@@ -360,7 +360,7 @@ pub unsafe fn start64() -> ! {
 
     idt::init();
 
-    mem::global.init(start32::MultiBootInfo(), start32::memory_start as uint);
+    mem::global.init(start32::MultiBootInfo(), start32::MemoryStart());
     write("Memory initialized. ");
     mem::global.stat();
 
