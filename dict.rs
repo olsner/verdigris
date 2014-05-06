@@ -54,9 +54,10 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         if max.is_null() { None } else { unsafe { Some(&mut *max) } }
     }
 
-    pub fn insert(&mut self, item : *mut V) {
+    pub fn insert<'a>(&mut self, item : *mut V) -> &'a mut V {
         node(item).left = null();
         node(item).right = self.root;
         self.root = item;
+        unsafe { &mut *item }
     }
 }

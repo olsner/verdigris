@@ -297,14 +297,7 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
 }
 
 fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
-    con::writeMutPtr(p as *mut Process);
-    con::putc(':');
-    con::writeUInt(i);
-    write(" <-> ");
-    con::writeUInt(j);
-    con::putc(':');
-    con::writeMutPtr(q as *mut Process);
-    con::newline();
+    p.assoc_handles(i, q, j);
 }
 
 fn init_modules(cpu : &mut PerCpu) {

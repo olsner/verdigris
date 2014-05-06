@@ -54,7 +54,7 @@ pub fn syscall(
     con::newline();
 
     if nr >= USER {
-        match (nr & MSG_KIND) {
+        match nr & MSG_KIND {
             MSG_KIND_CALL => (),
             MSG_KIND_SEND => (),
             _ => abort("Unknown IPC kind")

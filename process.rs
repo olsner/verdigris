@@ -223,13 +223,20 @@ impl Process {
         }
     }
 
-    pub fn new_handle(&mut self, id : uint, other : *mut Process) {
+    pub fn assoc_handles(&mut self, id: uint, other : &mut Process, other_id: uint) {
+        let x = self.new_handle(id, other);
+        let y = other.new_handle(other_id, self);
+        x.other = Some(y as *mut Handle);
+        y.other = Some(x as *mut Handle);
+    }
+
+    pub fn new_handle<'a>(&mut self, id : uint, other : *mut Process) -> &'a mut Handle {
         match self.handles.find(id) {
             Some(ref h) if h.id() != id => (),
             Some(h) => self.delete_handle(h),
             None => ()
         }
-        self.handles.insert(heap_copy(Handle::new(id, other)));
+        self.handles.insert(heap_copy(Handle::new(id, other)))
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
