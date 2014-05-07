@@ -320,7 +320,7 @@ fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
         con::writeMutPtr(q);
         con::newline();
     }
-    p.assoc_handles(i, q, j);
+    p.assoc_handles(j, q, i);
 }
 
 fn init_modules(cpu : &mut PerCpu) {
