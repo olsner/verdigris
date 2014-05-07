@@ -232,7 +232,6 @@ pub fn newline() { get().newline(); }
 pub fn putc(c : char) { get().putc(c); }
 #[inline(never)]
 pub fn write(string : &str) { get().write(string); }
-#[inline(never)]
 pub fn writeCStr(c_str : *u8) { get().writeCStr(c_str); }
 pub fn writeHex(x : uint) { get().writeHex(x); }
 pub fn writeInt(x : int) { get().writeInt(x); }

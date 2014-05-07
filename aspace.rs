@@ -320,11 +320,13 @@ impl AddressSpace {
     }
 
     pub fn add_pte(&mut self, vaddr : uint, pte : uint) {
-        write("Mapping ");
-        con::writePHex(vaddr);
-        write(" to ");
-        con::writePHex(pte);
-        con::newline();
+        if false {
+            write("Mapping ");
+            con::writePHex(vaddr);
+            write(" to ");
+            con::writePHex(pte);
+            con::newline();
+        }
         let pdp = get_alloc_pt(self.pml4, vaddr >> 39, 7);
         let pd = get_alloc_pt(pdp, vaddr >> 30, 7);
         let pt = get_alloc_pt(pd, vaddr >> 21, 7);

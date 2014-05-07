@@ -34,6 +34,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
     }
 
     // Return the greatest item with key <= key
+    #[inline(never)]
     pub fn find<'a>(&mut self, key : K) -> Option<&'a mut V> {
         let mut item = self.root;
         let mut max = null();
@@ -54,6 +55,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         if max.is_null() { None } else { unsafe { Some(&mut *max) } }
     }
 
+    #[inline(never)]
     pub fn insert<'a>(&mut self, item : *mut V) -> &'a mut V {
         node(item).left = null();
         node(item).right = self.root;

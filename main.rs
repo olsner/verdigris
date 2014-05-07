@@ -38,6 +38,11 @@ mod syscall;
 mod util;
 mod x86;
 
+static log_assoc_procs : bool = false;
+static log_page_fault : bool = false;
+static log_switch : bool = false;
+static mem_test : bool = false;
+
 #[allow(dead_code)]
 fn writeMBInfo(infop : *mboot::Info) {
     con::write("Multiboot info at ");
@@ -87,15 +92,17 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
         pub static INSTR : uint = 16;
     }
 
-    write("page fault ");
-    con::writeHex(error);
-    write(" cr2=");
-    con::writePHex(x86::cr2());
-    write(" rip=");
-    con::writePHex(p.regs.rip as uint);
-    write(" in process ");
-    con::writeMutPtr(p);
-    con::newline();
+    if log_page_fault {
+        write("page fault ");
+        con::writeHex(error);
+        write(" cr2=");
+        con::writePHex(x86::cr2());
+        write(" rip=");
+        con::writePHex(p.regs.rip as uint);
+        write(" in process ");
+        con::writeMutPtr(p);
+        con::newline();
+    }
 
     if (error & pf_errors::USER) == 0 {
         abort("kernel page fault\n");
@@ -164,9 +171,11 @@ impl PerCpu {
     }
 
     unsafe fn switch_to(&mut self, p: &mut Process) -> ! {
-        write("switch_to ");
-        con::writeMutPtr(p as *mut Process);
-        con::newline();
+        if log_switch {
+            write("switch_to ");
+            con::writeMutPtr(p as *mut Process);
+            con::newline();
+        }
         p.unset(process::Queued);
         p.set(process::Running);
         self.process = transmute(p as *mut Process);
@@ -178,14 +187,18 @@ impl PerCpu {
         }
         if p.is(process::FastRet) {
             p.unset(process::FastRet);
-            write("fastret to ");
-            con::writeHex(p.regs.rip as uint);
-            con::newline();
+            if log_switch {
+                write("fastret to ");
+                con::writeHex(p.regs.rip as uint);
+                con::newline();
+            }
             fastret(p);
         } else {
-            write("slowret to ");
-            con::writeHex(p.regs.rip as uint);
-            con::newline();
+            if log_switch {
+                write("slowret to ");
+                con::writeHex(p.regs.rip as uint);
+                con::newline();
+            }
             slowret(p);
         }
     }
@@ -297,6 +310,16 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
 }
 
 fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
+    if log_assoc_procs {
+        con::writeMutPtr(p);
+        con::putc(':');
+        con::writeUInt(i);
+        write(" <-> ");
+        con::writeUInt(j);
+        con::putc(':');
+        con::writeMutPtr(q);
+        con::newline();
+    }
     p.assoc_handles(i, q, j);
 }
 
@@ -360,8 +383,10 @@ pub unsafe fn start64() -> ! {
     let pcpu = PerCpu::new();
     let ref mut cpu = *pcpu;
     cpu.start();
-    cpu.memory.test();
-    mem::global.stat();
+    if mem_test {
+        cpu.memory.test();
+        mem::global.stat();
+    }
 
     init_modules(cpu);
 

@@ -34,6 +34,7 @@ impl<T : DListItem> DList<T> {
         DList { head : null(), tail : null() }
     }
 
+    #[inline(never)]
     pub fn append(&mut self, item : *mut T) {
         if self.tail.is_not_null() {
             let tail = self.tail;
@@ -55,6 +56,7 @@ impl<T : DListItem> DList<T> {
         }
     }
 
+    #[inline(never)]
     pub fn remove(&mut self, item : *mut T) -> *mut T {
         let prev = node(item).prev;
         let next = node(item).next;
