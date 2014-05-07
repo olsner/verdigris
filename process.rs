@@ -47,10 +47,11 @@ pub enum FlagBit {
 
 impl FlagBit {
     #[inline]
-    fn mask(self) -> uint {
+    pub fn mask(self) -> uint {
         return 1 << (self as uint);
     }
 }
+// TODO Implement OR for FlagBit
 
 pub struct FXSaveRegs {
     space : [u8, ..512]
@@ -58,7 +59,7 @@ pub struct FXSaveRegs {
 
 pub struct Handle {
     node : DictNode<uint, Handle>,
-    pub process : *mut Process,
+    process : *mut Process,
     // pointer to other handle if any. Its 'key' field is the other-name that
     // we need when e.g. sending it a message. If null this is not associated
     // in other-proc yet.
@@ -84,6 +85,12 @@ impl Handle {
 
     pub fn id(&self) -> uint { self.node.key }
     pub fn process(&self) -> &mut Process { unsafe { &mut *self.process } }
+    pub fn other(&mut self) -> Option<&mut Handle> {
+        match self.other {
+        Some(h) => Some(unsafe { &mut *h }),
+        None => None,
+        }
+    }
 }
 
 pub struct PendingPulse {
@@ -152,7 +159,7 @@ pub struct Process {
     waiting_for : *mut Process, // Option
 
     // List of processes waiting on this process.
-    waiters : DList<Process>,
+    pub waiters : DList<Process>,
     node : DListNode<Process>,
 
     aspace : *mut AddressSpace,
@@ -200,6 +207,10 @@ impl Process {
     #[inline]
     pub fn is(&self, f : FlagBit) -> bool {
         (self.flags & f.mask()) != 0
+    }
+
+    pub fn ipc_state(&self) -> Flags {
+        self.flags & (InRecv.mask() | InSend.mask() | PFault.mask())
     }
 
     pub fn set(&mut self, f : FlagBit) {
@@ -250,6 +261,10 @@ impl Process {
     pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
         handle.node.key = new_id;
         // TODO self.handles.unlink/relink/key_changed
+    }
+
+    pub fn add_waiter(&mut self, other : &mut Process) {
+        self.waiters.append(other);
     }
 
     pub fn dump(&self) {
