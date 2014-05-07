@@ -8,6 +8,7 @@ use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
 use mem::heap_copy;
+use util::abort;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -243,6 +244,7 @@ impl Process {
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
+        abort("not impl.");
     }
 
     pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
