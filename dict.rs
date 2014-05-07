@@ -62,4 +62,24 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         self.root = item;
         unsafe { &mut *item }
     }
+
+    pub fn iter<'a>(&'a self) -> DictIter<'a, V> {
+        DictIter { p: self.root }
+    }
+}
+
+struct DictIter<'a, T> {
+    p : *mut T,
+}
+
+impl<'a, K : Copy, V : DictItem<K>> Iterator<(K, &'a mut V)> for DictIter<'a, V> {
+    fn next(&mut self) -> Option<(K, &'a mut V)> {
+        if self.p.is_not_null() {
+            let res = self.p;
+            self.p = node(res).right;
+            unsafe { Some((node(res).key, &mut *res)) }
+        } else {
+            None
+        }
+    }
 }
