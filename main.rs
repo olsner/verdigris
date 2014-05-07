@@ -364,6 +364,19 @@ fn init_modules(cpu : &mut PerCpu) {
     } {}
 }
 
+pub fn dump_runqueue(queue: &DList<Process>) {
+    let mut count = 0;
+    for p in queue.iter() {
+        count += 1;
+    }
+    con::write("runqueue: ");
+    con::writeUInt(count);
+    con::newline();
+    for p in queue.iter() {
+        p.dump();
+    }
+}
+
 #[no_mangle]
 pub unsafe fn start64() -> ! {
     con::init(MutPhysAddr(0xb8000), 80, 25);
@@ -389,6 +402,7 @@ pub unsafe fn start64() -> ! {
     }
 
     init_modules(cpu);
+    //dump_runqueue(&cpu.runqueue);
 
 //  let mut i = 0;
 //  loop {

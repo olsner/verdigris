@@ -1,6 +1,8 @@
 use core::prelude::*;
 
 use aspace::AddressSpace;
+use con;
+use con::write;
 use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
@@ -80,6 +82,7 @@ impl Handle {
     }
 
     pub fn id(&self) -> uint { self.node.key }
+    pub fn process(&self) -> &mut Process { unsafe { &mut *self.process } }
 }
 
 pub struct PendingPulse {
@@ -245,5 +248,19 @@ impl Process {
     pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
         handle.node.key = new_id;
         // TODO self.handles.unlink/relink/key_changed
+    }
+
+    pub fn dump(&self) {
+        write("proc ");
+        con::writePtr(self);
+        write(":\n");
+
+        for (id,h) in self.handles.iter() {
+            write("  handle ");
+            con::writeUInt(id);
+            write(" -> proc ");
+            con::writeMutPtr(h.process());
+            con::newline();
+        }
     }
 }
