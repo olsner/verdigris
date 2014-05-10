@@ -218,7 +218,8 @@ fn alloc_pml4() -> *mut PML4 {
     return res;
 }
 
-fn get_alloc_pt(table : *mut PML4, index : uint, flags : uint) -> *mut PageTable {
+fn get_alloc_pt(table : *mut PML4, mut index : uint, flags : uint) -> *mut PageTable {
+    index &= 0x1ff;
     unsafe {
         let existing = (*table)[index];
         if (existing & 1) == 0 {
@@ -330,6 +331,6 @@ impl AddressSpace {
         let pdp = get_alloc_pt(self.pml4, vaddr >> 39, 7);
         let pd = get_alloc_pt(pdp, vaddr >> 30, 7);
         let pt = get_alloc_pt(pd, vaddr >> 21, 7);
-        unsafe { (*pt)[vaddr >> 12] = pte as u64; }
+        unsafe { (*pt)[(vaddr >> 12) & 0x1ff] = pte as u64; }
     }
 }
