@@ -10,6 +10,8 @@ use mem::heap_copy;
 use start32;
 use util::abort;
 
+static log_add_pte : bool = false;
+
 pub mod mapflag {
     pub static X : uint = 1;
     pub static W : uint = 2;
@@ -21,8 +23,8 @@ pub mod mapflag {
     pub static Phys : uint = 16;
     // Physical memory allocated and locked at map time; and deallocated when
     // unmapped.
-    #[allow(dead_code)] // TODO: Implement DMA-mappings and use.
     pub static DMA : uint = Anon | Phys;
+    pub static UserAllowed : uint = DMA | RWX;
 }
 
 // mapcard: the handle, offset and flags for the range of virtual addresses until
@@ -71,6 +73,10 @@ impl MapCard {
 
     fn same_addr(&self, other : &MapCard) -> bool {
         self.vaddr() == other.vaddr()
+    }
+
+    fn same(&self, other: &MapCard) -> bool {
+        return self.handle == other.handle && self.offset == other.offset;
     }
 
     fn set(&mut self, other : &MapCard) {
@@ -139,6 +145,10 @@ impl Backing {
             parent_paddr : alloc_frame_paddr(),
             child_node: DListNode::new(),
         }
+    }
+
+    pub fn has_vaddr(&self, vaddr : uint) -> bool {
+        return self.vaddr() == vaddr & !0xfff;
     }
 
     pub fn vaddr(&self) -> uint {
@@ -248,8 +258,16 @@ impl AddressSpace {
         return vaddr as uint - start32::kernel_base;
     }
 
+    // FIXME This should return by-value and have a default value instead.
     pub fn mapcard_find<'a>(&mut self, vaddr : uint) -> Option<&'a mut MapCard> {
         return self.mapcards.find(vaddr);
+    }
+
+    pub fn mapcard_find_def(&self, vaddr: uint) -> MapCard {
+        match self.mapcards.find_const(vaddr) {
+            Some(card) => *card,
+            None => MapCard::new(vaddr, 0, 0),
+        }
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
@@ -274,6 +292,20 @@ impl AddressSpace {
         self.mapcard_add(new);
     }
 
+    pub fn map_range(&mut self, start: uint, end: uint, handle: uint, offset: uint) {
+        let end_card = self.mapcard_find_def(end);
+        let new_end_card = MapCard::new(end, end_card.handle, end_card.offset);
+        let start_card = MapCard::new(start, handle, offset);
+        if start_card.same(&end_card) {
+            self.mapcards.remove(end_card.vaddr());
+        } else {
+            // Insert a new card 
+            self.mapcard_set_(&new_end_card);
+        }
+        self.mapcards.remove_range_exclusive(start, end);
+        self.mapcard_set_(&start_card);
+    }
+
     fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
     -> &'a Backing {
         let b = heap_copy(Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr)));
@@ -292,10 +324,10 @@ impl AddressSpace {
         use aspace::mapflag::*;
         use util::abort;
 
-        /*match self.backings.find(vaddr | 0xfff) {
-            Some(back) => { return &*back; },
-            None => ()
-        }*/
+        match self.backings.find_const(vaddr | 0xfff) {
+            Some(ref back) if back.has_vaddr(vaddr) => { return &**back; },
+            _ => ()
+        }
 
         match self.mapcard_find(vaddr) {
             Some(card) => {
@@ -321,7 +353,7 @@ impl AddressSpace {
     }
 
     pub fn add_pte(&mut self, vaddr : uint, pte : uint) {
-        if false {
+        if log_add_pte {
             write("Mapping ");
             con::writePHex(vaddr);
             write(" to ");

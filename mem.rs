@@ -242,11 +242,15 @@ impl PerCpu {
     }
 }
 
+extern "rust-intrinsic" {
+    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *T, count: uint);
+}
+
 pub fn heap_copy<T>(x : T) -> *mut T {
     use alloc;
     unsafe {
         let res : *mut T = alloc();
-        *res = x;
+        copy_nonoverlapping_memory(res, &x, 1);
         return res;
     }
 }

@@ -1,5 +1,7 @@
 use core::prelude::*;
 
+use free;
+
 pub struct Dict<T> {
     root : *mut T,
 }
@@ -33,9 +35,13 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         Dict { root : null() }
     }
 
+    pub fn find<'a>(&mut self, key : K) -> Option<&'a mut V> {
+        return self.find_(key);
+    }
+
     // Return the greatest item with key <= key
     #[inline(never)]
-    pub fn find<'a>(&mut self, key : K) -> Option<&'a mut V> {
+    fn find_<'a>(&self, key : K) -> Option<&'a mut V> {
         let mut item = self.root;
         let mut max = null();
         while item.is_not_null() {
@@ -55,12 +61,49 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         if max.is_null() { None } else { unsafe { Some(&mut *max) } }
     }
 
+    pub fn find_const<'a>(&self, key : K) -> Option<&'a V> {
+        match self.find_(key) {
+            Some(x) => Some(&*x),
+            None => None
+        }
+    }
+
     #[inline(never)]
     pub fn insert<'a>(&mut self, item : *mut V) -> &'a mut V {
         node(item).left = null();
         node(item).right = self.root;
         self.root = item;
         unsafe { &mut *item }
+    }
+
+    pub fn remove(&mut self, key: K) {
+        let mut p : *mut *mut V = &mut self.root;
+        unsafe {
+            while (*p).is_not_null() {
+                let item = *p;
+                if node(item).key == key {
+                    *p = node(item).right;
+                    free(item);
+                    break;
+                }
+                p = &mut node(item).right as *mut*mut V;
+            }
+        }
+    }
+
+    pub fn remove_range_exclusive(&mut self, start: K, end: K) {
+        unsafe {
+            let mut p : *mut *mut V = &mut self.root;
+            while (*p).is_not_null() {
+                let item = *p;
+                if start < node(item).key && node(item).key < end {
+                    *p = node(item).right;
+                    free(item);
+                } else {
+                    p = &mut node(item).right as *mut*mut V;
+                }
+            }
+        }
     }
 
     pub fn iter<'a>(&'a self) -> DictIter<'a, V> {

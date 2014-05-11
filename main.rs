@@ -35,7 +35,7 @@ mod mem;
 mod process;
 mod start32;
 mod syscall;
-mod util;
+pub mod util;
 mod x86;
 
 static log_assoc_procs : bool = false;
@@ -118,6 +118,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
 }
 
 pub fn handler_NM() {
+    abort("NM");
 }
 
 pub fn idle() -> ! {
@@ -204,7 +205,7 @@ impl PerCpu {
     }
 
     fn syscall_return(&mut self, p: &mut Process, rax : uint) -> ! {
-        p.regs.set_rax(rax);
+        p.regs.rax = rax;
         unsafe { self.switch_to(p); }
     }
 
@@ -245,8 +246,12 @@ pub fn alloc<T>() -> *mut T {
     malloc(size_of::<T>()) as *mut T
 }
 
+pub fn free<T>(p : *mut T) {
+    xfree(p as *mut u8);
+}
+
 #[lang="exchange_free"]
-pub fn free(p : *mut u8) {
+pub fn xfree(p : *mut u8) {
     if p.is_not_null() {
         cpu().memory.free_frame(p);
     }
@@ -283,8 +288,8 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     let aspace : *mut AddressSpace = unsafe { transmute(~AddressSpace::new()) };
     let ret : *mut Process = unsafe { transmute(~Process::new(aspace)) };
     unsafe {
-        (*ret).regs.set_rsp(0x100000);
-        (*ret).regs.set_rip(0x100000 + (start & 0xfff));
+        (*ret).regs.rsp = 0x100000;
+        (*ret).regs.rip = 0x100000 + (start & 0xfff);
     }
 
     unsafe {
@@ -366,7 +371,7 @@ fn init_modules(cpu : &mut PerCpu) {
 
 pub fn dump_runqueue(queue: &DList<Process>) {
     let mut count = 0;
-    for p in queue.iter() {
+    for _ in queue.iter() {
         count += 1;
     }
     con::write("runqueue: ");

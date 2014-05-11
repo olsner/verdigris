@@ -1,12 +1,16 @@
 use core::prelude::*;
 
+use aspace::mapflag;
 use con;
 use con::write;
 use cpu;
 use process;
 use process::Handle;
 use process::Process;
+use start32::kernel_base;
 use util::abort;
+
+static log_syscall : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
@@ -48,11 +52,13 @@ pub fn syscall(
     p.unset(process::Running);
     p.set(process::FastRet);
 
-    write("syscall! nr=");
-    con::writeUInt(nr);
-    write(" from process ");
-    con::writeMutPtr(p);
-    con::newline();
+    if log_syscall {
+        write("syscall! nr=");
+        con::writeUInt(nr);
+        write(" from process ");
+        con::writeMutPtr(p);
+        con::newline();
+    }
 
     if nr >= USER {
         match nr & MSG_KIND_MASK {
@@ -60,11 +66,12 @@ pub fn syscall(
             MSG_KIND_SEND => ipc_send(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
             _ => abort("Unknown IPC kind")
         }
-        // IPC syscall
+        unsafe { c.run(); }
     }
 
     match nr {
     RECV => ipc_recv(p, arg0),
+    MAP => syscall_map(p, arg0, arg1, arg2, arg3, arg4),
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
     PORTIO => syscall_portio(p, arg0, arg1, arg2),
     _ => abort("Unhandled syscall"),
@@ -79,7 +86,7 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     con::writeUInt(to);
     con::newline();
 
-    let mut handle = p.find_handle(to);
+    let handle = p.find_handle(to);
     match handle {
     Some(h) => {
         write("==> process ");
@@ -87,31 +94,96 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         con::newline();
         p.set(process::InSend);
         p.set(process::InRecv);
+        p.regs.rdi = to;
         send_or_block(h, msg, arg1, arg2, arg3, arg4, arg5);
     },
     None => abort("ipc_call: no recipient")
     }
-    abort("ipc_call unimplemented");
+    write("ipc_call: blocked\n");
+}
+
+fn transfer_set_handle(target: &mut Process, source: &mut Process) {
+    let mut rcpt = target.regs.rdi;
+    let from = source.regs.rdi;
+
+    let h = source.find_handle(from).get();
+    if rcpt == 0 {
+        rcpt = h.other().get().id();
+    } else if !target.find_handle(rcpt).is_some() {
+        match h.other() {
+            // Already associated, "junk" the fresh handle and just update the
+            // recipient-side handle.
+            Some(g) => rcpt = g.id(),
+            // Associate handles now.
+            None => {
+                let g = target.new_handle(rcpt, source);
+                g.associate(h);
+            },
+        }
+    } else {
+        // TODO Assert that rcpt <-> from. (But the caller is responsible for
+        // checking that first.)
+    }
+    target.regs.rdi = rcpt;
+}
+
+fn transfer_message(target: &mut Process, source: &mut Process) {
+    transfer_set_handle(target, source);
+
+    target.regs.rax = source.regs.rax;
+    target.regs.rdi = source.regs.rdi;
+    target.regs.rsi = source.regs.rsi;
+    target.regs.rdx = source.regs.rdx;
+    target.regs.r8 = source.regs.r8;
+    target.regs.r9 = source.regs.r9;
+    target.regs.r10 = source.regs.r10;
+
+    target.unset(process::InRecv);
+    source.unset(process::InSend);
+    // Check if source became unblocked or was in a sendrcv.
 }
 
 fn send_or_block(h : &mut Handle, msg: uint, arg1: uint, arg2: uint,
         arg3: uint, arg4: uint, arg5: uint) {
-    // h.process() is the recipient, the sender is the reverse
-    if h.process().ipc_state() == process::InRecv.mask() {
-        abort("actually sending is unimplemented");
-    } else {
-        match h.other() {
-            Some(g) => {
-                h.process().add_waiter(g.process())
-            },
-            None => abort("sending to unconnected handle"),
-        }
+    match h.other() {
+        Some(g) => {
+            let p = h.process();
+            let sender = g.process();
+
+            // Save regs - either we'll copy these in transfer_message or we'll
+            // need to store them until later on when the transfer can finish.
+            sender.regs.rax = msg;
+            sender.regs.rdi = h.id();
+            sender.regs.rsi = arg1;
+            sender.regs.rdx = arg2;
+            sender.regs.r10 = arg3;
+            sender.regs.r8 = arg4;
+            sender.regs.r9 = arg5;
+
+            // p is the recipient, the sender is in g.process().
+            if p.ipc_state() == process::InRecv.mask() {
+                let rcpt = h.process().regs.rdi;
+                // Check the receiving process' receipt handle
+                //   0 ==> transfer
+                //   !0, connected to our handle ==> transfer
+                //   !0, fresh ==> transfer
+                //   !0 otherwise ==> block
+                if rcpt == 0
+                || rcpt == g.id()
+                || !p.find_handle(rcpt).is_some() {
+                    transfer_message(p, sender);
+                }
+            }
+
+            p.add_waiter(sender)
+        },
+        None => abort("sending to unconnected handle"),
     }
 }
 
 fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         arg3: uint, arg4: uint, arg5: uint) {
-    let mut handle = p.find_handle(to);
+    let handle = p.find_handle(to);
     match handle {
     Some(h) => {
         p.set(process::InSend);
@@ -132,6 +204,7 @@ fn ipc_recv(p : &mut Process, from : uint) {
     con::newline();
 
     p.set(process::InRecv);
+    p.regs.rdi = from;
     match handle {
         Some(h) => {
             write("==> process ");
@@ -166,6 +239,25 @@ fn recv_from_any(p : &mut Process, id: uint) {
     // 1. Look for senders in waiters list
     // 2. Look for pending pulses
     // 3. Switch next
+}
+
+fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut offset: uint, size: uint) {
+    prot &= mapflag::UserAllowed;
+    // TODO Check (and return failure) on:
+    // * unaligned addr, offset, size (must be page-aligned)
+    if (prot & mapflag::DMA) == mapflag::DMA {
+        offset = match cpu().memory.alloc_frame() {
+            None => 0,
+            Some(p) => p as uint - kernel_base,
+        }
+    }
+
+    p.aspace().map_range(addr, addr + size, handle, (offset - addr) | prot);
+
+    if (prot & mapflag::Phys) == 0 {
+        offset = 0;
+    }
+    cpu().syscall_return(p, offset);
 }
 
 fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {

@@ -8,7 +8,6 @@ use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
 use mem::heap_copy;
-use util::abort;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -91,6 +90,11 @@ impl Handle {
         None => None,
         }
     }
+
+    pub fn associate(&mut self, other: &mut Handle) {
+        self.other = Some(other as *mut Handle);
+        other.other = Some(self as *mut Handle);
+    }
 }
 
 pub struct PendingPulse {
@@ -110,37 +114,37 @@ impl FXSaveRegs {
     }
 }
 
-enum RegIndex {
-    RAX = 0,
-    RCX = 1,
-    RDX = 2,
-    RBX = 3,
-    RSP = 4,
-    RBP = 5,
-    RSI = 6,
-    RDI = 7
-}
-
 pub struct Regs {
-	pub gps : [u64, ..16],
-	pub rip : u64,
-	pub rflags : u64,
+    pub rax : uint,
+    pub rcx : uint,
+    pub rdx : uint,
+    pub rbx : uint,
+    pub rsp : uint,
+    pub rbp : uint,
+    pub rsi : uint,
+    pub rdi : uint,
+
+    pub r8 : uint,
+    pub r9 : uint,
+    pub r10 : uint,
+    pub r11 : uint,
+    pub r12 : uint,
+    pub r13 : uint,
+    pub r14 : uint,
+    pub r15 : uint,
+
+    pub rip : uint,
+    pub rflags : uint,
 }
 
 impl Regs {
     fn new() -> Regs {
         use x86::rflags;
-        Regs { gps : [0, ..16], rip : 0, rflags : rflags::IF as u64 }
-    }
-
-    pub fn set_rsp(&mut self, rsp : uint) {
-        self.gps[RSP as uint] = rsp as u64;
-    }
-    pub fn set_rip(&mut self, rip : uint) {
-        self.rip = rip as u64;
-    }
-    pub fn set_rax(&mut self, rax: uint) {
-        self.gps[RAX as uint] = rax as u64;
+        Regs {
+            rax: 0, rcx: 0, rdx: 0, rbx: 0, rsp: 0, rbp: 0, rsi: 0, rdi: 0,
+            r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
+            rip : 0, rflags : rflags::IF
+        }
     }
 }
 
@@ -255,7 +259,7 @@ impl Process {
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
-        abort("not impl.");
+        self.handles.remove(handle.node.key);
     }
 
     pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
