@@ -5,6 +5,8 @@ SHELL = /bin/bash
 OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
+# RUST_PREFIX must be set pointing to the prefix where a nice nightly is
+# installed. This was tested with the 2014-05-15 build.
 RUSTC := $(RUST_PREFIX)/bin/rustc
 CLANG ?= clang
 CC = clang
