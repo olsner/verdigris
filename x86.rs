@@ -64,15 +64,8 @@ pub fn entry(handler_ptr : *u8) -> Entry {
 
 pub static null_entry : Entry = (0,0);
 
-pub type BuildEntry = (u8, extern "C" unsafe fn());
 pub type Entry = (u64,u64);
 pub type Table = [Entry, ..49];
-
-pub fn build(target : &mut [Entry, ..49], entries : &[BuildEntry]) {
-    for &(vec,handler) in entries.iter() {
-        target[vec as uint] = entry(handler as *u8);
-    }
-}
 
 pub fn limit(_table : &[Entry, ..49]) -> u16 {
     return 49 * 16 - 1;
@@ -110,9 +103,9 @@ pub unsafe fn init() {
         // We can generate this, probably in less than 68 bytes?
         static irq_handlers : [u32, ..17];
     }
-    let handlers = [(14, handler_PF_stub), (7, handler_NM_stub)];
     static mut idt_table : [Entry, ..49] = [null_entry, ..49];
-    build(&mut idt_table, handlers);
+    idt_table[7] = entry(handler_NM_stub as *u8);
+    idt_table[14] = entry(handler_PF_stub as *u8);
     for i in range(32 as uint,49) {
         idt_table[i] = entry((&irq_handlers[i - 32]) as *u32 as *u8);
     }

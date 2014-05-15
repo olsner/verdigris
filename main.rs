@@ -236,7 +236,7 @@ pub fn cpu() -> &mut PerCpu {
 
 #[lang="exchange_malloc"]
 #[inline(never)]
-pub fn malloc(size : uint) -> *mut u8 {
+pub fn malloc(size : uint, _align: uint) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");
     }
@@ -245,7 +245,7 @@ pub fn malloc(size : uint) -> *mut u8 {
 
 #[inline(never)]
 pub fn alloc<T>() -> *mut T {
-    malloc(size_of::<T>()) as *mut T
+    malloc(size_of::<T>(), 0) as *mut T
 }
 
 pub fn free<T>(p : *mut T) {
@@ -287,8 +287,8 @@ fn dummy() {}
 fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     let end = (end_unaligned + 0xfff) & !0xfff;
     let start_page = start & !0xfff;
-    let aspace : *mut AddressSpace = unsafe { transmute(~AddressSpace::new()) };
-    let ret : *mut Process = unsafe { transmute(~Process::new(aspace)) };
+    let aspace : *mut AddressSpace = unsafe { transmute(box AddressSpace::new()) };
+    let ret : *mut Process = unsafe { transmute(box Process::new(aspace)) };
     unsafe {
         (*ret).regs.rsp = 0x100000;
         (*ret).regs.rip = 0x100000 + (start & 0xfff);

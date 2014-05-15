@@ -108,9 +108,9 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
     let mut rcpt = target.regs.rdi;
     let from = source.regs.rdi;
 
-    let h = source.find_handle(from).get();
+    let h = source.find_handle(from).unwrap();
     if rcpt == 0 {
-        rcpt = h.other().get().id();
+        rcpt = h.other().unwrap().id();
     } else if !target.find_handle(rcpt).is_some() {
         match h.other() {
             // Already associated, "junk" the fresh handle and just update the

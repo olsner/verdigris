@@ -5,6 +5,9 @@ SHELL = /bin/bash
 OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
+ifneq ($(RUST_PREFIX),)
+RUSTC := $(RUST_PREFIX)/bin/rustc
+endif
 RUSTC ?= rustc
 CLANG ?= clang
 CC = clang
@@ -15,8 +18,9 @@ LLVM_DIS = llvm-dis$(LLVM)
 LLVM_AS = llvm-as$(LLVM)
 AS = clang -c
 YASM ?= yasm
+ZPIPE = $(OUT)/zpipe
 
-TARGET = x86_64-pc-linux-elf
+TARGET = x86_64-unknown-linux-gnu
 CFLAGS = -g -std=c99 $(COPTFLAGS)
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 LDFLAGS = --check-sections --gc-sections
@@ -25,6 +29,10 @@ COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
 RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
+RUSTLIBS = -L.
+ifeq ($(RUST_PREFIX),)
+RUSTLIBS += -L $(OUT)/rust-core
+endif
 
 CP = @cp
 ifeq ($(VERBOSE),YES)
@@ -54,7 +62,11 @@ KERNEL_OBJS = $(addprefix $(OUT)/, runtime.o syscall.o amalgam.o)
 
 KERNEL_OBJS += start32.o
 
+ifneq ($(RUST_PREFIX),)
+CORE_CRATE := libcore-c5ed6fb4-0.11.0-pre.rlib
+else
 CORE_CRATE := $(shell $(RUSTC) $(RUSTCFLAGS) rust-core/core/lib.rs --out-dir $(OUT)/rust-core --crate-file-name)
+endif
 
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(HUSH_LD) $(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^ -Map $(@:.elf=.map)
@@ -66,7 +78,7 @@ $(OUT)/kernel: $(OUT)/kernel.elf
 -include $(OUT)/syscall.d
 
 $(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
-	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=bc -L. -L $(OUT)/rust-core -o $@ $<
+	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=bc $(RUSTLIBS) -o $@ $<
 
 -include $(OUT)/main.d
 
@@ -104,6 +116,20 @@ $(OUT)/%.o: %.asm
 
 all: $(OUT)/amalgam.ll
 
+$(ZPIPE): zpipe.c
+	$(HUSH_CC) $(CC) -lz -o $@ $<
+
+ifneq ($(RUST_PREFIX),)
+RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
+$(OUT)/rust-core/core.bc: $(RUST_LIBDIR)/$(CORE_CRATE) $(ZPIPE)
+	@mkdir -p $(@D)
+	@ar p $< $(@F).deflate | $(ZPIPE) -d > $@
+
+$(OUT)/rust-core/$(CORE_CRATE): $(RUST_LIBDIR)/$(CORE_CRATE)
+	@mkdir -p $(@D)
+	@$(CP) $< $@
+
+else
 $(OUT)/rust-core/core.bc:
 	@mkdir -p $(@D)
 	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) --emit=bc rust-core/core/lib.rs --out-dir $(@D) -Z no-landing-pads
@@ -115,6 +141,7 @@ $(OUT)/rust-core/$(CORE_CRATE):
 
 -include $(OUT)/rust-core/core.d
 -include $(OUT)/rust-core/crate.d
+endif
 
 GRUB_MODULES = --modules="boot multiboot"
 
