@@ -1,4 +1,0 @@
-[submodule "rust-core"]
-	path = rust-core
-	url = https://github.com/olsner/rust-core.git
-	ignore = dirty
