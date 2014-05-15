@@ -235,6 +235,7 @@ pub fn cpu() -> &mut PerCpu {
 }
 
 #[lang="exchange_malloc"]
+#[inline(never)]
 pub fn malloc(size : uint) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");
@@ -242,6 +243,7 @@ pub fn malloc(size : uint) -> *mut u8 {
     return cpu().memory.alloc_frame_panic();
 }
 
+#[inline(never)]
 pub fn alloc<T>() -> *mut T {
     malloc(size_of::<T>()) as *mut T
 }

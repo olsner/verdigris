@@ -179,7 +179,7 @@ pub struct Process {
     // since we have to verify and match the GRANT to the correct page, we
     // simply don't save anything that might be wrong.
     // The lower bits are access flags for the fault/request.
-    fault_addr: uint,
+    pub fault_addr: uint,
 
     fxsave : FXSaveRegs,
 }

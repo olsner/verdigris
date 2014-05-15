@@ -11,6 +11,7 @@ use start32::kernel_base;
 use util::abort;
 
 static log_syscall : bool = false;
+static log_transfer_message : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
@@ -72,6 +73,7 @@ pub fn syscall(
     match nr {
     RECV => ipc_recv(p, arg0),
     MAP => syscall_map(p, arg0, arg1, arg2, arg3, arg4),
+    PFAULT => syscall_pfault(p, arg1, arg2), // arg0 is always 0
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
     PORTIO => syscall_portio(p, arg0, arg1, arg2),
     _ => abort("Unhandled syscall"),
@@ -127,8 +129,16 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
     target.regs.rdi = rcpt;
 }
 
-fn transfer_message(target: &mut Process, source: &mut Process) {
+fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     transfer_set_handle(target, source);
+
+    if log_transfer_message {
+        write("transfer_message ");
+        con::writeMutPtr(target);
+        write(" <- ");
+        con::writeMutPtr(source);
+        con::newline();
+    }
 
     target.regs.rax = source.regs.rax;
     target.regs.rdi = source.regs.rdi;
@@ -140,7 +150,12 @@ fn transfer_message(target: &mut Process, source: &mut Process) {
 
     target.unset(process::InRecv);
     source.unset(process::InSend);
-    // Check if source became unblocked or was in a sendrcv.
+
+    cpu().queue(target);
+    if source.ipc_state() == 0 {
+        cpu().queue(source);
+    }
+    unsafe { cpu().run(); }
 }
 
 fn send_or_block(h : &mut Handle, msg: uint, arg1: uint, arg2: uint,
@@ -230,13 +245,13 @@ fn recv(p: &mut Process, handle: &mut Handle) {
     }
 }
 
-fn recv_from_any(p : &mut Process, id: uint) {
+fn recv_from_any(p : &mut Process, _id: uint) {
     for waiter in p.waiters.iter() {
         if waiter.is(process::InSend) {
             abort("found sender!");
         }
     }
-    // 1. Look for senders in waiters list
+    // TODO Look for pending pulse
     // 2. Look for pending pulses
     // 3. Switch next
 }
@@ -258,6 +273,22 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
         offset = 0;
     }
     cpu().syscall_return(p, offset);
+}
+
+fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
+    vaddr &= !0xfff;
+
+    // set fault address
+    p.fault_addr = vaddr;
+    p.regs.rsi = vaddr;
+    p.regs.rdx = access & mapflag::RWX;
+    // Look up vaddr, get handle, offset and flags
+    let card = p.aspace().mapcard_find_def(vaddr);
+    p.regs.rsi += card.offset; // proc.rsi is now translated into offset
+    p.regs.rdi = card.handle;
+    p.set(process::PFault);
+
+    // Now do the equivalent of sendrcv with rdi=handle, rsi=offset, rdx=flags
 }
 
 fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
