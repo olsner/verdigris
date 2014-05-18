@@ -23,11 +23,10 @@ TARGET = x86_64-unknown-linux-gnu
 CFLAGS = -g -std=c99 $(COPTFLAGS)
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 LDFLAGS = --check-sections --gc-sections
-OPT_LEVEL ?= 2
 COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
 OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
-RUSTCFLAGS = -g --opt-level=$(OPT_LEVEL) --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
+RUSTCFLAGS = -g -O --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 RUSTLIBS = -L.
 
 CP = @cp
