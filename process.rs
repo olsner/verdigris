@@ -1,5 +1,6 @@
 use core::prelude::*;
 
+use alloc;
 use aspace::AddressSpace;
 use con;
 use con::write;
@@ -7,7 +8,6 @@ use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
-use mem::heap_copy;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -46,8 +46,8 @@ pub enum FlagBit {
 
 impl FlagBit {
     #[inline]
-    pub fn mask(self) -> uint {
-        return 1 << (self as uint);
+    pub fn mask(self) -> u32 {
+        return 1 << (self as u32);
     }
 }
 // TODO Implement OR for FlagBit
@@ -148,7 +148,7 @@ impl Regs {
     }
 }
 
-type Flags = uint;
+type Flags = u32;
 
 pub struct Process {
     pub regs : Regs,
@@ -157,7 +157,7 @@ pub struct Process {
 
     // Bitwise OR of flags values
     flags : Flags,
-    count : uint,
+    count : u32,
 
     // Pointer to the process we're waiting for (if any). See flags.
     waiting_for : *mut Process, // Option
@@ -234,6 +234,7 @@ impl Process {
         }
     }
 
+    #[inline(never)]
     pub fn find_handle<'a>(&mut self, id : uint) -> Option<&'a mut Handle> {
         let res = self.handles.find(id);
         match res {
@@ -255,7 +256,11 @@ impl Process {
             Some(h) => self.delete_handle(h),
             None => ()
         }
-        self.handles.insert(heap_copy(Handle::new(id, other)))
+        unsafe {
+            let h = alloc();
+            *h = Handle::new(id, other);
+            self.handles.insert(h)
+        }
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {

@@ -164,6 +164,7 @@ impl PerCpu {
         }
     }
 
+    #[inline(never)]
     unsafe fn run(&mut self) -> ! {
         match self.runqueue.pop() {
             Some(p) => self.switch_to(&mut *p),
@@ -235,7 +236,7 @@ pub fn cpu() -> &mut PerCpu {
 }
 
 #[lang="exchange_malloc"]
-#[inline(never)]
+#[inline(always)]
 pub fn malloc(size : uint, _align: uint) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");

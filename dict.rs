@@ -13,7 +13,7 @@ pub struct DictNode<K, V> {
 }
 
 impl<K,V> DictNode<K,V> {
-    #[inline(never)]
+    #[inline(always)]
     pub fn new(key : K) -> DictNode<K, V> {
         DictNode { key : key, left : null(), right : null() }
     }
@@ -78,6 +78,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
         unsafe { &mut *item }
     }
 
+    #[inline(never)]
     pub fn remove(&mut self, key: K) {
         let mut p : *mut *mut V = &mut self.root;
         unsafe {

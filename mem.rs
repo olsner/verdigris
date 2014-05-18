@@ -34,12 +34,17 @@ pub mod framestack {
         from_option(p, none)
     }
 
+    #[inline]
     pub fn push_frame<T>(head : &mut FreeFrameS, frame : *mut T) {
         let free = frame as *mut FreeFrame;
-        unsafe { (*free).next = *head; }
-        *head = free;
+        unsafe {
+            let h = *head;
+            (*free).next = h;
+            *head = free;
+        }
     }
 
+    #[inline]
     pub fn pop_frame(head : &mut FreeFrameS) -> FreeFrameP {
         if *head == none {
             None
@@ -60,8 +65,9 @@ pub struct Global {
     garbage : FreeFrameS,
     // Frames that are all zeroes except for the first word
     free : FreeFrameS,
-    num_used : uint,
-    num_total : uint,
+    // 2^32 pages ~= 16TB
+    num_used : u32,
+    num_total : u32,
 }
 
 pub static empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
@@ -105,7 +111,7 @@ impl Global {
         }
 
         let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
-        let mut count = 0;
+        let mut count : u32 = 0;
         for item in mmap {
             if item.item_type != mboot::MemoryTypeMemory as u32 {
                 continue;
@@ -128,6 +134,7 @@ impl Global {
         self.num_total = count;
     }
 
+    #[inline(never)]
     pub fn free_frame(&mut self, vpaddr : *mut u8) {
         self.num_used -= 1;
         push_frame(&mut self.garbage, vpaddr);
@@ -151,11 +158,11 @@ impl Global {
     }
 
     pub fn free_pages(&self) -> uint {
-        self.num_total - self.num_used
+        (self.num_total - self.num_used) as uint
     }
 
     pub fn used_pages(&self) -> uint {
-        self.num_used
+        self.num_used as uint
     }
 
     #[inline(never)]
@@ -202,6 +209,7 @@ impl PerCpu {
         }
     }
 
+    #[inline(always)]
     pub fn free_frame(&mut self, page : *mut u8) {
         get().free_frame(page);
     }
@@ -241,17 +249,3 @@ impl PerCpu {
         }
     }
 }
-
-extern "rust-intrinsic" {
-    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *T, count: uint);
-}
-
-pub fn heap_copy<T>(x : T) -> *mut T {
-    use alloc;
-    unsafe {
-        let res : *mut T = alloc();
-        copy_nonoverlapping_memory(res, &x, 1);
-        return res;
-    }
-}
-
