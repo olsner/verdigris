@@ -90,7 +90,7 @@ $(OUT)/%.s: $(OUT)/%.bc Makefile
 
 $(OUT)/%.o: %.s
 	@mkdir -p $(@D)
-	$(HUSH_AS) $(AS) -o $@ $<
+	$(HUSH_AS) as -g -o $@ $<
 
 %.o: %.s
 	$(HUSH_AS) $(AS) -o $@ $<
