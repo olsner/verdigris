@@ -121,18 +121,16 @@ impl Writer for DebugCon {
     }
 }
 
-static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, width : 0, height : 0, color : 0 };
+static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, color : 0 };
 
 pub struct Console {
     buffer : *mut u16,
     position : uint,
-    width : uint,
-    height : uint,
     pub color : u16
 }
 
 pub fn init(buffer : *mut u16, width : uint, height : uint) {
-    unsafe { con = Console::new(buffer, width, height); }
+    unsafe { con = Console::new(buffer); }
 }
 
 fn get() -> &'static mut Console {
@@ -144,12 +142,10 @@ pub fn dbg() -> DebugCon {
 }
 
 impl Console {
-    pub fn new(buffer : *mut u16, width : uint, height : uint) -> Console {
+    pub fn new(buffer : *mut u16) -> Console {
         Console {
             buffer : buffer,
             position : 0,
-            width : width,
-            height : height,
             color : 0x0f00,
         }
     }
@@ -167,8 +163,11 @@ impl Console {
         self.position = 0;
     }
 
+    fn width(&self) -> uint { 80 }
+    fn height(&self) -> uint { 25 }
+
     fn clear_eol(&mut self) {
-        let count = self.width - (self.position % self.width);
+        let count = self.width() - (self.position % self.width());
         self.clear_range(self.position, count);
         self.position += count;
     }
@@ -190,8 +189,8 @@ impl Console {
 
     #[inline(always)]
     fn scroll(&mut self) {
-        let dist = self.width;
-        let count = self.width * (self.height - 1);
+        let dist = self.width();
+        let count = self.width() * (self.height() - 1);
         self.copy_back(0, dist, count);
         self.clear_range(count, dist);
         self.position = count;
@@ -218,7 +217,7 @@ impl Writer for Console {
             self.putchar(self.position, value);
             self.position += 1;
         }
-        if self.position >= self.width * self.height {
+        if self.position >= self.width() * self.height() {
             self.scroll();
         }
     }
