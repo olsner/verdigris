@@ -2,8 +2,8 @@ use core::prelude::*;
 
 use free;
 
-pub struct Dict<T> {
-    root : *mut T,
+pub struct Dict<K, V> {
+    root : *mut V,
 }
 
 pub struct DictNode<K, V> {
@@ -31,8 +31,8 @@ fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
     unsafe { (*p).node() }
 }
 
-impl<K : Ord + Copy, V : DictItem<K>> Dict<V> {
-    pub fn empty() -> Dict<V> {
+impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
+    pub fn empty() -> Dict<K, V> {
         Dict { root : null() }
     }
 

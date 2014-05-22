@@ -214,9 +214,9 @@ pub struct AddressSpace {
 //  .handles    restruc dict
 //  .pending    restruc dict
 
-    mapcards : Dict<MapCard>,
-    backings : Dict<Backing>,
-    sharings : Dict<Sharing>
+    mapcards : Dict<uint, MapCard>,
+    backings : Dict<uint, Backing>,
+    sharings : Dict<uint, Sharing>
 }
 
 fn alloc_pml4() -> *mut PML4 {

@@ -170,8 +170,8 @@ pub struct Process {
 
     // TODO: move this into address space so handles can be shared between
     // threads.
-    handles : Dict<Handle>,
-    pending : Dict<PendingPulse>,
+    handles : Dict<uint, Handle>,
+    pending : Dict<uint, PendingPulse>,
 
     // When PROC_PFAULT is set, the virtual address that faulted.
     // Note that we lose a lot of data about the mapping that we looked up
