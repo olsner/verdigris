@@ -13,7 +13,6 @@ pub struct DictNode<K, V> {
 }
 
 impl<K,V> DictNode<K,V> {
-    #[inline(never)]
     pub fn new(key : K) -> DictNode<K, V> {
         DictNode { key : key, left : null(), right : null() }
     }
