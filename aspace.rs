@@ -1,12 +1,12 @@
 use core::prelude::*;
 use core::mem::transmute;
 
-use alloc;
 use con;
 use con::write;
 use cpu;
 use dict::*;
 use dlist::*;
+use mem::heap_copy;
 use start32;
 use util::abort;
 
@@ -55,7 +55,6 @@ impl DictItem<uint> for MapCard {
 }
 
 impl MapCard {
-    #[inline(never)]
     fn new(vaddr : uint, handle : uint, offset : uint) -> MapCard {
         MapCard { as_node: DictNode::new(vaddr), handle: handle, offset: offset }
     }
@@ -272,7 +271,7 @@ impl AddressSpace {
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
-        self.mapcards.insert(unsafe { transmute(box card) });
+        self.mapcards.insert(heap_copy(*card));
     }
 
     pub fn mapcard_set(&mut self, vaddr : uint, handle : uint, offset : uint, access : uint) {
@@ -280,7 +279,6 @@ impl AddressSpace {
         self.mapcard_set_(&MapCard::new(vaddr, handle, offset | access));
     }
 
-    #[inline(never)]
     fn mapcard_set_(&mut self, new : &MapCard) {
         match self.mapcard_find(new.vaddr()) {
             Some(card) => {
@@ -309,21 +307,17 @@ impl AddressSpace {
     }
 
     fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
-    -> &'a mut Backing {
-        let b : *mut Backing = alloc();
-        unsafe {
-            *b = Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr));
-            self.backings.insert(b)
-        }
+    -> &'a Backing {
+        let b = heap_copy(Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr)));
+        self.backings.insert(b);
+        return unsafe { &*b };
     }
 
     fn add_anon_backing<'a>(&mut self, card : MapCard, vaddr : uint)
-    -> &'a mut Backing {
-        let b : *mut Backing = alloc();
-        unsafe {
-            *b = Backing::new_anon(vaddr | card.flags());
-            self.backings.insert(b)
-        }
+    -> &'a Backing {
+        let b = heap_copy(Backing::new_anon(vaddr | card.flags()));
+        self.backings.insert(b);
+        return unsafe { &*b };
     }
 
     pub fn find_add_backing<'a>(&mut self, vaddr : uint) -> &'a Backing {
@@ -342,9 +336,9 @@ impl AddressSpace {
                 }
                 if card.handle == 0 {
                     if (card.flags() & Anon) != 0 {
-                        return &*self.add_anon_backing(*card, vaddr);
+                        return self.add_anon_backing(*card, vaddr);
                     } else if (card.flags() & Phys) != 0 {
-                        return &*self.add_phys_backing(*card, vaddr);
+                        return self.add_phys_backing(*card, vaddr);
                     } else {
                         abort("not anon or phys for handle==0");
                     }
