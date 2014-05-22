@@ -250,6 +250,7 @@ impl Process {
         y.other = Some(x as *mut Handle);
     }
 
+    #[inline(never)]
     pub fn new_handle<'a>(&mut self, id : uint, other : *mut Process) -> &'a mut Handle {
         match self.handles.find(id) {
             Some(ref h) if h.id() != id => (),

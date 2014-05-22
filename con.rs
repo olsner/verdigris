@@ -24,7 +24,6 @@ unsafe fn memset16(dst : *mut u16, v : u16, count : uint) {
 pub trait Writer {
     fn putc(&mut self, c : char);
 
-    #[inline(never)]
     fn newline(&mut self) {
         self.putc('\n');
     }
@@ -227,6 +226,7 @@ impl Writer for Console {
 
 
 pub fn clear() { get().clear(); }
+#[inline(never)]
 pub fn newline() { get().newline(); }
 #[inline(never)]
 pub fn putc(c : char) { get().putc(c); }

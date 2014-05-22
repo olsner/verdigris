@@ -47,8 +47,7 @@ pub fn syscall(
 ) -> ! {
     use syscall::nr::*;
 
-    let c = cpu();
-    let p = unsafe { c.get_process() };
+    let p = unsafe { cpu().get_process() };
     // FIXME cpu.leave_proc?
     p.unset(process::Running);
     p.set(process::FastRet);
@@ -67,7 +66,7 @@ pub fn syscall(
             MSG_KIND_SEND => ipc_send(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
             _ => abort("Unknown IPC kind")
         }
-        unsafe { c.run(); }
+        unsafe { cpu().run(); }
     }
 
     match nr {
@@ -79,7 +78,7 @@ pub fn syscall(
     _ => abort("Unhandled syscall"),
     }
 
-    unsafe { c.run(); }
+    unsafe { cpu().run(); }
 }
 
 fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
@@ -151,11 +150,12 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     target.unset(process::InRecv);
     source.unset(process::InSend);
 
-    cpu().queue(target);
+    let c = cpu();
+    c.queue(target);
     if source.ipc_state() == 0 {
-        cpu().queue(source);
+        c.queue(source);
     }
-    unsafe { cpu().run(); }
+    unsafe { c.run(); }
 }
 
 fn send_or_block(h : &mut Handle, msg: uint, arg1: uint, arg2: uint,
