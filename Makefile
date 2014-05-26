@@ -7,6 +7,8 @@ GRUBDIR ?= $(OUT)/grub
 
 # RUST_PREFIX must be set pointing to the prefix where a nice nightly is
 # installed. This was tested with the 2014-05-15 build.
+# Default: make a symlink rust-nightly in the project root, pointing to Rust.
+RUST_PREFIX ?= rust-nightly
 RUSTC := $(RUST_PREFIX)/bin/rustc
 CLANG ?= clang
 CC = clang
