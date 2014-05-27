@@ -235,7 +235,7 @@ pub fn cpu() -> &mut PerCpu {
 }
 
 #[lang="exchange_malloc"]
-#[inline(never)]
+#[inline(always)]
 pub fn xmalloc(size : uint, _align: uint) -> *mut u8 {
     malloc(size)
 }
@@ -244,21 +244,30 @@ pub fn malloc(size : uint) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");
     }
-    return cpu().memory.alloc_frame_panic();
+    #[inline(never)]
+    fn malloc_() -> *mut u8 {
+        cpu().memory.alloc_frame_panic()
+    }
+    malloc_()
 }
 
-#[inline(never)]
+#[inline(always)]
 pub fn alloc<T>() -> *mut T {
     malloc(size_of::<T>()) as *mut T
 }
 
 pub fn free<T>(p : *mut T) {
+    #[inline(never)]
+    fn free_(p: *mut u8) {
+        cpu().memory.free_frame(p);
+    }
     if p.is_not_null() {
-        cpu().memory.free_frame(p as *mut u8);
+        free_(p as *mut u8);
     }
 }
 
 #[lang="exchange_free"]
+#[inline(always)]
 pub fn xfree(p : *mut u8, _size: uint, _align: uint) {
     free(p);
 }
