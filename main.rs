@@ -236,7 +236,11 @@ pub fn cpu() -> &mut PerCpu {
 
 #[lang="exchange_malloc"]
 #[inline(never)]
-pub fn malloc(size : uint, _align: uint) -> *mut u8 {
+pub fn xmalloc(size : uint, _align: uint) -> *mut u8 {
+    malloc(size)
+}
+
+pub fn malloc(size : uint) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");
     }
@@ -245,18 +249,18 @@ pub fn malloc(size : uint, _align: uint) -> *mut u8 {
 
 #[inline(never)]
 pub fn alloc<T>() -> *mut T {
-    malloc(size_of::<T>(), 0) as *mut T
+    malloc(size_of::<T>()) as *mut T
 }
 
 pub fn free<T>(p : *mut T) {
-    xfree(p as *mut u8);
+    if p.is_not_null() {
+        cpu().memory.free_frame(p as *mut u8);
+    }
 }
 
 #[lang="exchange_free"]
-pub fn xfree(p : *mut u8) {
-    if p.is_not_null() {
-        cpu().memory.free_frame(p);
-    }
+pub fn xfree(p : *mut u8, _size: uint, _align: uint) {
+    free(p);
 }
 
 unsafe fn setup_msrs(gs : uint) {
