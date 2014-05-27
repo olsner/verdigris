@@ -22,12 +22,12 @@ YASM ?= yasm
 ZPIPE = $(OUT)/zpipe
 
 TARGET = x86_64-unknown-linux-gnu
-CFLAGS = -g -std=c99 $(COPTFLAGS)
+CFLAGS = -g -std=c99 -Oz -ffunction-sections -fdata-sections
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 LDFLAGS = --check-sections --gc-sections
-COPTFLAGS = -Oz -ffunction-sections -fdata-sections
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
-OPTFLAGS = $(COPTFLAGS) -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
+OPTFLAGS = -Oz -function-sections -data-sections
+OPTFLAGS += -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
 RUSTCFLAGS = -g -O --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 RUSTLIBS = -L.
 
