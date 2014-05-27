@@ -175,6 +175,8 @@ impl PerCpu {
         if log_switch {
             write("switch_to ");
             con::writeMutPtr(p as *mut Process);
+            write(" rip=");
+            con::writeHex(p.regs.rip as uint);
             con::newline();
         }
         p.unset(process::Queued);
@@ -188,18 +190,8 @@ impl PerCpu {
         }
         if p.is(process::FastRet) {
             p.unset(process::FastRet);
-            if log_switch {
-                write("fastret to ");
-                con::writeHex(p.regs.rip as uint);
-                con::newline();
-            }
             fastret(p);
         } else {
-            if log_switch {
-                write("slowret to ");
-                con::writeHex(p.regs.rip as uint);
-                con::newline();
-            }
             slowret(p);
         }
     }
