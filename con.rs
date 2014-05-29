@@ -129,7 +129,7 @@ pub struct Console {
     pub color : u16
 }
 
-pub fn init(buffer : *mut u16, width : uint, height : uint) {
+pub fn init(buffer : *mut u16, _width : uint, _height : uint) {
     unsafe { con = Console::new(buffer); }
 }
 

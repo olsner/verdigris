@@ -11,7 +11,7 @@ extern {
     static kernel_pdp : [u64, ..512];
 }
 
-pub static kernel_base : uint = - (1 << 30);
+pub static kernel_base : uint = -(1 << 30) as uint;
 
 pub fn HighAddr<T>(obj : &T) -> &T {
     unsafe { &*PhysAddr(obj as *T as uint) }

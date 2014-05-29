@@ -1,6 +1,5 @@
 #![allow(ctypes)]
 #![no_std]
-#![no_main]
 #![feature(globs)]
 #![feature(asm)]
 // Adding pub mod (another fix for this warning) increases footprint, so just
