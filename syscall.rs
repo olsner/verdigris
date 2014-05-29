@@ -60,15 +60,6 @@ pub fn syscall(
         con::newline();
     }
 
-    if nr >= USER {
-        match nr & MSG_KIND_MASK {
-            MSG_KIND_CALL => ipc_call(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
-            MSG_KIND_SEND => ipc_send(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
-            _ => abort("Unknown IPC kind")
-        }
-        unsafe { cpu().run(); }
-    }
-
     match nr {
     RECV => ipc_recv(p, arg0),
     MAP => syscall_map(p, arg0, arg1, arg2, arg3, arg4),
@@ -79,7 +70,18 @@ pub fn syscall(
         con::putc(arg0 as u8 as char);
         cpu().syscall_return(p, 0);
     },
+    _ if nr >= USER => {
+        match nr & MSG_KIND_MASK {
+            MSG_KIND_CALL => ipc_call(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
+            MSG_KIND_SEND => ipc_send(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
+            _ => abort("Unknown IPC kind")
+        }
+    },
     _ => abort("Unhandled syscall"),
+    }
+
+    if p.is_runnable() {
+        abort("process not blocked at return");
     }
 
     unsafe { cpu().run(); }
