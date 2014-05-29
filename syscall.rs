@@ -12,6 +12,7 @@ use util::abort;
 
 static log_syscall : bool = false;
 static log_transfer_message : bool = false;
+static log_recv : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
@@ -220,22 +221,26 @@ fn ipc_recv(p : &mut Process, from : uint) {
         handle = p.find_handle(from);
     }
 
-    write("recv from ");
-    con::writeUInt(from);
-    con::newline();
+    if log_recv {
+        con::writeMutPtr(p);
+        write(" recv from ");
+        con::writeUInt(from);
+    }
 
     p.set(process::InRecv);
     p.regs.rdi = from;
     match handle {
         Some(h) => {
-            write("==> process ");
-            con::writeMutPtr(h.process());
-            con::newline();
+            if log_recv {
+                write(" ==> process ");
+                con::writeMutPtr(h.process());
+                con::newline();
+            }
             recv(p, h)
         },
         None => {
-            if from != 0 {
-                write("==> fresh\n");
+            if log_recv && from != 0 {
+                write(" ==> fresh\n");
             }
             recv_from_any(p, from)
         }
@@ -252,11 +257,27 @@ fn recv(p: &mut Process, handle: &mut Handle) {
 }
 
 fn recv_from_any(p : &mut Process, _id: uint) {
+    let mut sender = None;
     for waiter in p.waiters.iter() {
         if waiter.is(process::InSend) {
-            abort("found sender!");
+            sender = Some(waiter);
+            break;
         }
     }
+    match sender {
+        Some(s) => {
+            p.remove_waiter(s);
+            transfer_message(p, s);
+        },
+        None => ()
+    }
+
+    if log_recv {
+        write("recv: no waiters for ");
+        con::writeMutPtr(p);
+        con::newline();
+    }
+
     // TODO Look for pending pulse
     // 2. Look for pending pulses
     // 3. Switch next

@@ -274,6 +274,12 @@ impl Process {
 
     pub fn add_waiter(&mut self, other : &mut Process) {
         self.waiters.append(other);
+        other.waiting_for = self as *mut Process;
+    }
+
+    pub fn remove_waiter(&mut self, other : &mut Process) {
+        self.waiters.remove(other);
+        other.waiting_for = RawPtr::null();
     }
 
     pub fn dump(&self) {
