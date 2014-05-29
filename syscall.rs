@@ -12,6 +12,8 @@ use util::abort;
 
 static log_syscall : bool = false;
 static log_transfer_message : bool = false;
+static log_portio : bool = false;
+
 static log_recv : bool = false;
 
 pub mod nr {
@@ -347,5 +349,12 @@ fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
     0x14 => asm!("outl %eax, %dx" :: "{eax}"(data), "{dx}"(port)),
     _ => abort("unhandled portio operation")
     } }
+    if log_portio {
+        write("portio: port="); con::writeHex(port & 0xffff);
+        write(" op="); con::writeUInt(op);
+        write(" data="); con::writeHex(data);
+        write(" res="); con::writeHex(res);
+        con::newline();
+    }
     cpu().syscall_return(p, res);
 }
