@@ -10,24 +10,29 @@ GRUBDIR ?= $(OUT)/grub
 # Default: make a symlink rust-nightly in the project root, pointing to Rust.
 RUST_PREFIX ?= rust-nightly
 RUSTC := $(RUST_PREFIX)/bin/rustc
-CLANG ?= clang
-CC = clang
+CLANG ?= clang-3.5
+CC = $(CLANG)
 LLVM = -3.5
 LLVM_LINK = llvm-link$(LLVM)
 OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
 LLVM_AS = llvm-as$(LLVM)
-AS = clang -c
+AS = $(CLANG) -c
 YASM ?= yasm
 ZPIPE = $(OUT)/zpipe
 
 TARGET = x86_64-unknown-linux-gnu
 CFLAGS = -g -std=c99 -Oz -ffunction-sections -fdata-sections
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
+CFLAGS += -ffreestanding $(COPTFLAGS)
+COPTFLAGS = -fno-unroll-loops -freroll-loops -funit-at-a-time
+COPTFLAGS += -mllvm -exhaustive-register-search
 LDFLAGS = --check-sections --gc-sections
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
 OPTFLAGS = -Oz -function-sections -data-sections
+OPTFLAGS += -disable-internalize -std-link-opts
 OPTFLAGS += -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
+OPTFLAGS += -argpromotion -mergefunc -deadargelim
 RUSTCFLAGS = -g -O --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
 RUSTLIBS = -L.
 
@@ -79,7 +84,7 @@ $(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
 NO_SPLIT_STACKS = sed '/^attributes / s/ "split-stack"/ nounwind/'
 
 $(OUT)/amalgam.bc: $(OUT)/main.bc $(OUT)/rust-core/core.bc
-	$(HUSH_OPT) $(LLVM_LINK) -o - $^ | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) > $@
+	$(HUSH_OPT) $(LLVM_LINK) -o - $^ | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
 
 # I believe it should be possible to use llc for this step with the same result
 # as clang since we've already optimized, but it seems clang has additional
@@ -94,7 +99,7 @@ $(OUT)/%.o: %.s
 	$(HUSH_AS) as -g -o $@ $<
 
 %.o: %.s
-	$(HUSH_AS) $(AS) -o $@ $<
+	$(HUSH_AS) $(AS) $(ASFLAGS) -o $@ $<
 
 $(OUT)/%.o: %.asm
 	@mkdir -p $(@D)
