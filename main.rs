@@ -218,9 +218,9 @@ impl PerCpu {
 // can't quite guarantee that...
 pub fn cpu() -> &mut PerCpu {
     unsafe {
-        let mut ret = 0;
-        asm!("movq %gs:($0), $0" : "=r"(ret) : "0"(ret));
-        return &mut *(ret as *mut PerCpu);
+        let mut ret : *mut PerCpu;
+        asm!("movq %gs:($1), $0" : "=r"(ret) : "r"(0));
+        return &mut *ret;
     }
 }
 
