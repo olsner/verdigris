@@ -164,8 +164,14 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
         con::newline();
     }
 
+    // FIXME Should use special fastret for message passing instead of
+    // unsetting fastret and setting everything via the process struct.
+    // Probably something like:
+    // c.ipc_return(target, transfer_set_handle(...), source)
+    // after updating source process runnability and state.
+
     target.regs.rax = source.regs.rax;
-    target.regs.rdi = source.regs.rdi;
+    // rdi is set by transfer_set_handle
     target.regs.rsi = source.regs.rsi;
     target.regs.rdx = source.regs.rdx;
     target.regs.r8 = source.regs.r8;
@@ -173,10 +179,13 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     target.regs.r10 = source.regs.r10;
 
     target.unset(process::InRecv);
+    target.unset(process::FastRet);
     source.unset(process::InSend);
 
     let c = cpu();
     c.queue(target);
+
+    // FIXME If source was on target's wait queue, we don't clear it here.
     if source.ipc_state() == 0 {
         c.queue(source);
     }
