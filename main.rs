@@ -113,8 +113,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
     // just aborting.
     p.aspace().add_pte(back.vaddr(), back.pte());
 
-    cpu().queue(p);
-    unsafe { cpu().run(); }
+    unsafe { cpu().switch_to(p); }
 }
 
 pub fn handler_NM() {
