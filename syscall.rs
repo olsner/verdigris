@@ -13,6 +13,7 @@ use util::abort;
 static log_syscall : bool = false;
 static log_transfer_message : bool = false;
 static log_portio : bool = false;
+static log_hmod : bool = false;
 
 static log_recv : bool = false;
 
@@ -322,20 +323,28 @@ fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
 
 fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
     let handle = p.find_handle(id);
+    if log_hmod {
+        con::writeMutPtr(p);
+        write(" hmod: id="); con::writeHex(id);
+        write(" rename="); con::writeHex(rename);
+        write(" copy="); con::writeHex(copy);
+        con::newline();
+    }
     match handle {
-    None => return,
+    None => (),
     Some(h) => {
         // Fresh/dissociated handle for the same process as the original
         if copy != 0 {
             p.new_handle(copy, h.process());
         }
-        if rename != 0 {
-            p.rename_handle(h, rename);
-        } else {
+        if rename == 0 {
             p.delete_handle(h);
+        } else if rename != id {
+            p.rename_handle(h, rename);
         }
     }
     }
+    cpu().syscall_return(p, 0);
 }
 
 fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
