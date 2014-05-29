@@ -16,6 +16,7 @@ static log_portio : bool = false;
 static log_hmod : bool = false;
 
 static log_recv : bool = false;
+static log_ipc : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
@@ -93,16 +94,21 @@ pub fn syscall(
 
 fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     arg3: uint, arg4: uint, arg5: uint) {
-    write("ipc_call to ");
-    con::writeUInt(to);
-    con::newline();
+    if log_ipc {
+        con::writeMutPtr(p);
+        write(" ipc_call to ");
+        con::writeUInt(to);
+    }
 
     let handle = p.find_handle(to);
     match handle {
     Some(h) => {
-        write("==> process ");
-        con::writeMutPtr(h.process());
-        con::newline();
+        if log_ipc {
+            write("==> process ");
+            con::writeMutPtr(h.process());
+            con::newline();
+        }
+
         p.set(process::InSend);
         p.set(process::InRecv);
         p.regs.rdi = to;
@@ -110,7 +116,9 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     },
     None => abort("ipc_call: no recipient")
     }
-    write("ipc_call: blocked\n");
+    if log_ipc {
+        write("ipc_call: blocked\n");
+    }
 }
 
 fn transfer_set_handle(target: &mut Process, source: &mut Process) {
@@ -134,6 +142,13 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
     } else {
         // TODO Assert that rcpt <-> from. (But the caller is responsible for
         // checking that first.)
+    }
+    if log_transfer_message {
+        write("transfer_set_handle: rcpt=");
+        con::writeHex(rcpt);
+        write(" for ");
+        con::writeHex(target.regs.rdi);
+        con::newline();
     }
     target.regs.rdi = rcpt;
 }
@@ -208,6 +223,13 @@ fn send_or_block(h : &mut Handle, msg: uint, arg1: uint, arg2: uint,
 
 fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         arg3: uint, arg4: uint, arg5: uint) {
+    if log_ipc {
+        con::writeMutPtr(p);
+        write(" ipc_send to ");
+        con::writeUInt(to);
+        con::newline();
+    }
+
     let handle = p.find_handle(to);
     match handle {
     Some(h) => {
