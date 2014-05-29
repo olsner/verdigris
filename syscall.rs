@@ -112,7 +112,7 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         p.set(process::InSend);
         p.set(process::InRecv);
         p.regs.rdi = to;
-        send_or_block(h, msg, arg1, arg2, arg3, arg4, arg5);
+        send_or_block(p, h, msg, arg1, arg2, arg3, arg4, arg5);
     },
     None => abort("ipc_call: no recipient")
     }
@@ -183,42 +183,46 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     unsafe { c.run(); }
 }
 
-fn send_or_block(h : &mut Handle, msg: uint, arg1: uint, arg2: uint,
-        arg3: uint, arg4: uint, arg5: uint) {
-    match h.other() {
-        Some(g) => {
-            let p = h.process();
-            let sender = g.process();
+fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
+        arg1: uint, arg2: uint, arg3: uint, arg4: uint, arg5: uint) {
+    let p = h.process();
 
-            // Save regs - either we'll copy these in transfer_message or we'll
-            // need to store them until later on when the transfer can finish.
-            sender.regs.rax = msg;
-            sender.regs.rdi = h.id();
-            sender.regs.rsi = arg1;
-            sender.regs.rdx = arg2;
-            sender.regs.r10 = arg3;
-            sender.regs.r8 = arg4;
-            sender.regs.r9 = arg5;
+    // Save regs - either we'll copy these in transfer_message or we'll
+    // need to store them until later on when the transfer can finish.
+    sender.regs.rax = msg;
+    sender.regs.rdi = h.id();
+    sender.regs.rsi = arg1;
+    sender.regs.rdx = arg2;
+    sender.regs.r10 = arg3;
+    sender.regs.r8 = arg4;
+    sender.regs.r9 = arg5;
 
-            // p is the recipient, the sender is in g.process().
-            if p.ipc_state() == process::InRecv.mask() {
-                let rcpt = h.process().regs.rdi;
-                // Check the receiving process' receipt handle
-                //   0 ==> transfer
-                //   !0, connected to our handle ==> transfer
-                //   !0, fresh ==> transfer
-                //   !0 otherwise ==> block
-                if rcpt == 0
-                || rcpt == g.id()
-                || !p.find_handle(rcpt).is_some() {
-                    transfer_message(p, sender);
-                }
-            }
+    let other_id = match h.other() {
+        Some(g) => g.id(),
+        None => 0,
+    };
 
-            p.add_waiter(sender)
-        },
-        None => abort("sending to unconnected handle"),
+    // p is the recipient, the sender is in g.process().
+    if p.ipc_state() == process::InRecv.mask() {
+        let rcpt = h.process().regs.rdi;
+        // Check the receiving process' receipt handle
+        //   0 ==> transfer
+        //   !0, connected to our handle ==> transfer
+        //   !0, fresh ==> transfer
+        //   !0 otherwise ==> block
+        if rcpt == other_id || !p.find_handle(rcpt).is_some() {
+            transfer_message(p, sender);
+        }
     }
+
+    if log_ipc {
+        write("send_or_block: ");
+        con::writeMutPtr(sender);
+        write(" waits for ");
+        con::writeMutPtr(p);
+        con::newline();
+    }
+    p.add_waiter(sender)
 }
 
 fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
@@ -234,7 +238,7 @@ fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     match handle {
     Some(h) => {
         p.set(process::InSend);
-        send_or_block(h, msg, arg1, arg2, arg3, arg4, arg5);
+        send_or_block(p, h, msg, arg1, arg2, arg3, arg4, arg5);
     },
     None => abort("ipc_send: no recipient")
     }
