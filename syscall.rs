@@ -75,6 +75,10 @@ pub fn syscall(
     PFAULT => syscall_pfault(p, arg1, arg2), // arg0 is always 0
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
     PORTIO => syscall_portio(p, arg0, arg1, arg2),
+    WRITE => {
+        con::putc(arg0 as u8 as char);
+        cpu().syscall_return(p, 0);
+    },
     _ => abort("Unhandled syscall"),
     }
 
