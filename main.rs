@@ -40,8 +40,10 @@ mod x86;
 static log_assoc_procs : bool = false;
 static log_page_fault : bool = false;
 static log_switch : bool = false;
+static log_queue : bool = false;
 static log_irq : bool = false;
 static log_idle : bool = false;
+
 static mem_test : bool = false;
 
 #[allow(dead_code)]
@@ -188,6 +190,14 @@ impl PerCpu {
     }
 
     fn queue(&mut self, p: &mut Process) {
+        if log_queue {
+            write("queue ");
+            con::writeMutPtr(p);
+            if p.is(process::Queued) {
+                write(" already queued");
+            }
+            con::newline();
+        }
         if !p.is_queued() {
             p.set(process::Queued);
             self.runqueue.append(p);
@@ -196,7 +206,14 @@ impl PerCpu {
 
     unsafe fn run(&mut self) -> ! {
         match self.runqueue.pop() {
-            Some(p) => self.switch_to(&mut *p),
+            Some(p) => {
+                let r = &mut *p;
+                if !r.is_queued() {
+                    abort("popped unqueued item?");
+                }
+                r.unset(process::Queued);
+                self.switch_to(r);
+            },
             None => idle()
         }
     }
@@ -204,12 +221,17 @@ impl PerCpu {
     unsafe fn switch_to(&mut self, p: &mut Process) -> ! {
         if log_switch {
             write("switch_to ");
-            con::writeMutPtr(p as *mut Process);
+            con::writeMutPtr(p);
             write(" rip=");
             con::writeHex(p.regs.rip as uint);
+            if p.is(process::FastRet) {
+                write(" fastret");
+            }
+            if p.is(process::Queued) {
+                write(" queued");
+            }
             con::newline();
         }
-        p.unset(process::Queued);
         p.set(process::Running);
         self.process = transmute(p as *mut Process);
         // TODO Check fpu_process, see if we need to set/reset TS bit in cr0
