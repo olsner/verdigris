@@ -1,5 +1,7 @@
 use core::prelude::*;
 
+use util::abort;
+
 pub struct DList<T> {
     head : *mut T,
     tail : *mut T,
@@ -36,6 +38,9 @@ impl<T : DListItem> DList<T> {
 
     #[inline(never)]
     pub fn append(&mut self, item : *mut T) {
+        if !(node(item).prev.is_null() && node(item).next.is_null()) {
+            abort("appending item already in list");
+        }
         if self.tail.is_not_null() {
             let tail = self.tail;
             self.tail = item;

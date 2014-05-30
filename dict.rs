@@ -107,6 +107,18 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
         }
     }
 
+    pub fn pop<'a>(&mut self) -> Option<&'a mut V> {
+        if self.root.is_null() {
+            return None;
+        }
+        unsafe {
+            let res = self.root;
+            self.root = node(res).right;
+            node(res).right = null();
+            return Some(&mut *res);
+        }
+    }
+
     pub fn iter<'a>(&'a self) -> DictIter<'a, V> {
         DictIter { p: self.root }
     }
