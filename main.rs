@@ -237,12 +237,12 @@ impl PerCpu {
         // TODO Check fpu_process, see if we need to set/reset TS bit in cr0
         x86::set_cr3(p.cr3);
         extern "C" {
-            fn fastret(p : &mut Process) -> !;
+            fn fastret(p : &mut Process, rax : uint) -> !;
             fn slowret(p : &mut Process) -> !;
         }
         if p.is(process::FastRet) {
             p.unset(process::FastRet);
-            fastret(p);
+            fastret(p, p.regs.rax);
         } else {
             slowret(p);
         }
