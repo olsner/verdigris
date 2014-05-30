@@ -40,6 +40,8 @@ mod x86;
 static log_assoc_procs : bool = false;
 static log_page_fault : bool = false;
 static log_switch : bool = false;
+static log_irq : bool = false;
+static log_idle : bool = false;
 static mem_test : bool = false;
 
 #[allow(dead_code)]
@@ -73,11 +75,33 @@ fn writeMBInfo(infop : *mboot::Info) {
     }
 }
 
-pub fn generic_irq_handler(p : &mut Process, vec : u8) {
-    write("IRQ! vec=");
-    con::writeUInt(vec as uint);
-    con::newline();
-    cpu().queue(p);
+#[inline(never)]
+pub fn generic_irq_handler(vec : u8) {
+    if log_irq {
+        write("IRQ! vec=");
+        con::writeUInt(vec as uint);
+        con::newline();
+    }
+
+    let c = cpu();
+    let mask = 1 << (vec - 32);
+    if c.irq_delayed & mask != 0 {
+        write("IRQ: already delayed\n");
+        return;
+    }
+    c.irq_delayed |= mask;
+    if !c.irq_process().is_some() {
+        abort("IRQ: no irq process");
+    }
+    let p = c.irq_process().unwrap();
+
+    if log_irq {
+        write("IRQ: proc=");
+        con::writeMutPtr(p);
+        con::newline();
+    }
+
+    syscall::try_deliver_irq(p);
 }
 
 pub fn page_fault(p : &mut Process, error : uint) -> ! {
@@ -109,7 +133,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
 
     let back = p.aspace().find_add_backing(x86::cr2() & !0xfff);
     // FIXME should return e.g. Option<> so we can detect failures better than
-    // just aborting.
+    // just aborting in find_add_backing.
     p.aspace().add_pte(back.vaddr(), back.pte());
 
     unsafe { cpu().switch_to(p); }
@@ -121,19 +145,25 @@ pub fn handler_NM() {
 
 pub fn idle() -> ! {
     loop {
-        write("idle\n");
-        unsafe { asm!("swapgs; sti; hlt; cli; swapgs" :::: "volatile"); } }
+        if log_idle {
+            write("idle\n");
+        }
+        cpu().process = None;
+        unsafe { asm!("sti; hlt; cli" :::: "volatile"); }
+    }
 }
 
 pub struct PerCpu {
     selfp : *mut PerCpu,
     stack : *mut u8,
     process : Option<&'static mut Process>,
-    // 
 
     // End of assembly-fixed fields.
     memory : mem::PerCpu,
     runqueue : DList<Process>,
+
+    irq_process : Option<&'static mut Process>,
+    irq_delayed : uint,
 }
 
 impl PerCpu {
@@ -146,7 +176,9 @@ impl PerCpu {
             stack : stack,
             memory : mem,
             runqueue : DList::empty(),
-            process : None
+            process : None,
+            irq_process : None,
+            irq_delayed : 0,
         };
         return p
     }
@@ -199,16 +231,31 @@ impl PerCpu {
         unsafe { self.switch_to(p); }
     }
 
-    #[inline(never)]
-    unsafe fn get_process<'a>(&self) -> &'a mut Process {
-        &mut **(&self.process as *Option<&'static mut Process> as *Option<&'a mut Process> as **mut Process)
+    fn get_process<'a>(&'a mut self) -> Option<&'a mut Process> {
+        match self.process {
+            Some(ref p) => Some(unsafe { &mut *(*p as *mut Process) }),
+            None => None,
+        }
     }
 
     fn leave_proc(&mut self) {
-        unsafe {
-            let p = self.get_process();
-            p.unset(process::Running);
-            //self.process = None;
+        match self.process {
+            Some(ref mut p) => p.unset(process::Running),
+            None => (),
+        };
+    }
+
+    fn irq_process<'a>(&'a mut self) -> Option<&'a mut Process> {
+        match self.irq_process {
+            Some(ref p) => Some(unsafe { &mut *(*p as *mut Process) }),
+            None => None,
+        }
+    }
+
+    fn is_irq_process(&self, p: &mut Process) -> bool {
+        match self.irq_process {
+        None => false,
+        Some(ref q) => (p as *mut Process) == (*q as *mut Process),
         }
     }
 }
@@ -358,6 +405,9 @@ fn init_modules(cpu : &mut PerCpu) {
     // gets possible to make them runnable.
     let mut i = 0;
     for p in head.iter() {
+        if i == 0 {
+            cpu.irq_process = Some(unsafe { &mut *(p as *mut Process) });
+        }
         i += 1;
         // start iterating at j = i + 1, and q = p.next...
         let mut j = 0;

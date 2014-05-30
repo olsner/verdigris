@@ -4,6 +4,7 @@ use aspace::mapflag;
 use con;
 use con::write;
 use cpu;
+use dump_runqueue;
 use process;
 use process::Handle;
 use process::Process;
@@ -17,6 +18,7 @@ static log_hmod : bool = false;
 
 static log_recv : bool = false;
 static log_ipc : bool = false;
+static log_pulse : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
@@ -52,18 +54,9 @@ pub fn syscall(
 ) -> ! {
     use syscall::nr::*;
 
-    let p = unsafe { cpu().get_process() };
-    // FIXME cpu.leave_proc?
+    let p = cpu().get_process().unwrap();
     p.unset(process::Running);
     p.set(process::FastRet);
-
-    if log_syscall {
-        write("syscall! nr=");
-        con::writeUInt(nr);
-        write(" from process ");
-        con::writeMutPtr(p);
-        con::newline();
-    }
 
     match nr {
     RECV => ipc_recv(p, arg0),
@@ -71,9 +64,10 @@ pub fn syscall(
     PFAULT => syscall_pfault(p, arg1, arg2), // arg0 is always 0
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
     PORTIO => syscall_portio(p, arg0, arg1, arg2),
+    PULSE => syscall_pulse(p, arg0, arg1),
     WRITE => {
         con::putc(arg0 as u8 as char);
-        cpu().syscall_return(p, 0);
+        syscall_return(p, 0);
     },
     _ if nr >= USER => {
         match nr & MSG_KIND_MASK {
@@ -82,7 +76,16 @@ pub fn syscall(
             _ => abort("Unknown IPC kind")
         }
     },
-    _ => abort("Unhandled syscall"),
+    _ => {
+        if log_syscall {
+            write("syscall! nr=");
+            con::writeUInt(nr);
+            write(" from process ");
+            con::writeMutPtr(p);
+            con::newline();
+        }
+        abort("Unhandled syscall")
+    },
     }
 
     if p.is_runnable() {
@@ -132,14 +135,32 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
         match h.other() {
             // Already associated, "junk" the fresh handle and just update the
             // recipient-side handle.
-            Some(g) => rcpt = g.id(),
+            Some(g) => {
+                rcpt = g.id();
+                if g.other != Some(h as *mut Handle) {
+                    abort("other.other != self");
+                }
+                if log_transfer_message {
+                    write("transfer_set_handle: g=");
+                    con::writeMutPtr(g);
+                    write(", g.id()=");
+                    con::writeHex(rcpt);
+                    con::newline();
+                }
+            },
             // Associate handles now.
             None => {
                 let g = target.new_handle(rcpt, source);
                 g.associate(h);
+                if g.id() != rcpt {
+                    abort("weird");
+                }
             },
         }
     } else {
+        if rcpt != h.other().unwrap().id() {
+            abort("rcpt handle mismatch");
+        }
         // TODO Assert that rcpt <-> from. (But the caller is responsible for
         // checking that first.)
     }
@@ -148,6 +169,8 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
         con::writeHex(rcpt);
         write(" for ");
         con::writeHex(target.regs.rdi);
+        write(" from ");
+        con::writeHex(from);
         con::newline();
     }
     target.regs.rdi = rcpt;
@@ -183,13 +206,53 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     source.unset(process::InSend);
 
     let c = cpu();
+    if false && log_transfer_message {
+        dump_runqueue(&c.runqueue);
+        target.dump();
+        source.dump();
+    }
+    source.remove_waiter(target);
     c.queue(target);
 
-    // FIXME If source was on target's wait queue, we don't clear it here.
     if source.ipc_state() == 0 {
+        target.remove_waiter(source);
         c.queue(source);
     }
+
+    if false && log_transfer_message {
+        dump_runqueue(&c.runqueue);
+        target.dump();
+        source.dump();
+    }
     unsafe { c.run(); }
+}
+
+// TODO This and remaining IPC functions should probably be moved to a separate
+// ipc module.
+pub fn try_deliver_irq(p : &mut Process) {
+    let c = cpu();
+    let irqs = c.irq_delayed;
+    if can_deliver_pulse(p, 0) {
+        c.irq_delayed = 0;
+        deliver_pulse(p, 0, irqs);
+    }
+    c.irq_delayed = irqs;
+}
+
+pub fn can_deliver_pulse(p : &mut Process, rcpt: uint) -> bool {
+    p.ipc_state() == process::InRecv.mask() &&
+    // If it's a receive from (wrong) specific, we can't deliver now.
+    // Otherwise, both fresh and 0 is OK.
+    (p.regs.rdi == rcpt || !p.find_handle(p.regs.rdi).is_some())
+}
+
+fn deliver_pulse(p: &mut Process, rcpt: uint, pulses: uint) -> ! {
+    p.regs.rdi = rcpt;
+    p.regs.rsi = pulses;
+    // See comment in transfer_message about special ipc-return
+    p.unset(process::FastRet);
+    p.unset(process::InRecv);
+    syscall_return(p, nr::PULSE);
 }
 
 fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
@@ -198,6 +261,7 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
 
     // Save regs - either we'll copy these in transfer_message or we'll
     // need to store them until later on when the transfer can finish.
+    // FIXME: The instant transfer_message path should be able to avoid this.
     sender.regs.rax = msg;
     sender.regs.rdi = h.id();
     sender.regs.rsi = arg1;
@@ -240,6 +304,8 @@ fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         con::writeMutPtr(p);
         write(" ipc_send to ");
         con::writeUInt(to);
+//        write(" ==>");
+//        con::writeMutPtr(p.find_handle(to).unwrap().process());
         con::newline();
     }
 
@@ -249,7 +315,10 @@ fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         p.set(process::InSend);
         send_or_block(p, h, msg, arg1, arg2, arg3, arg4, arg5);
     },
-    None => abort("ipc_send: no recipient")
+    None => {
+        p.dump();
+        abort("ipc_send: no recipient")
+    }
     }
 }
 
@@ -310,15 +379,54 @@ fn recv_from_any(p : &mut Process, _id: uint) {
         None => ()
     }
 
+    match p.pop_pending_handle() {
+    Some(h) => deliver_pulse(p, h.id(), h.pop_pulses()),
+    None => (),
+    }
+
+    let c = cpu();
+    if c.is_irq_process(p) && c.irq_delayed != 0 {
+        let irqs = c.irq_delayed;
+        c.irq_delayed = 0;
+        deliver_pulse(p, 0, irqs);
+    }
+
     if log_recv {
-        write("recv: no waiters for ");
         con::writeMutPtr(p);
+        write(" recv: nothing to receive\n");
+    }
+
+    // Nothing to receive, run something else.
+    unsafe { c.run(); }
+}
+
+fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
+    if log_pulse {
+        con::writeMutPtr(p);
+        write(" send pulse ");
+        con::writeHex(pulses);
+        write(" to ");
+        con::writeHex(handle);
         con::newline();
     }
 
-    // TODO Look for pending pulse
-    // 2. Look for pending pulses
-    // 3. Switch next
+    let h = p.find_handle(handle).unwrap();
+    let q = h.process();
+    let g = h.other().unwrap();
+    if can_deliver_pulse(q, g.id()) {
+        cpu().queue(p);
+        deliver_pulse(q, g.id(), pulses);
+    }
+    if g.add_pulses(pulses) == 0 {
+        if log_pulse {
+            con::writeMutPtr(q);
+            write(" can't receive pulse right now, pending\n");
+        }
+
+        // First pulse added to this process
+        q.add_pending_handle(g);
+    }
+    syscall_return(p, 0);
 }
 
 fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut offset: uint, size: uint) {
@@ -337,7 +445,7 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
     if (prot & mapflag::Phys) == 0 {
         offset = 0;
     }
-    cpu().syscall_return(p, offset);
+    syscall_return(p, offset);
 }
 
 fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
@@ -379,10 +487,19 @@ fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
         }
     }
     }
-    cpu().syscall_return(p, 0);
+    syscall_return(p, 0);
 }
 
+#[inline(never)]
 fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
+    if log_portio {
+        con::writeMutPtr(p);
+        write(" portio: port="); con::writeHex(port & 0xffff);
+        write(" op="); con::writeHex(op);
+        if op & 0x10 != 0 {
+            write(" write "); con::writeHex(data);
+        }
+    }
     let mut res : uint = 0;
     unsafe { match op {
     0x01 => asm!("inb %dx, %al" : "={al}"(res) : "{dx}"(port)),
@@ -394,11 +511,15 @@ fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
     _ => abort("unhandled portio operation")
     } }
     if log_portio {
-        write("portio: port="); con::writeHex(port & 0xffff);
-        write(" op="); con::writeUInt(op);
-        write(" data="); con::writeHex(data);
-        write(" res="); con::writeHex(res);
+        if op & 0x10 == 0 {
+            write(" res="); con::writeHex(res);
+        }
         con::newline();
     }
+    syscall_return(p, res);
+}
+
+#[inline(never)]
+fn syscall_return(p : &mut Process, res : uint) -> ! {
     cpu().syscall_return(p, res);
 }

@@ -1,5 +1,7 @@
 use core::prelude::*;
 
+use free;
+
 use aspace::AddressSpace;
 use con;
 use con::write;
@@ -62,8 +64,8 @@ pub struct Handle {
     // pointer to other handle if any. Its 'key' field is the other-name that
     // we need when e.g. sending it a message. If null this is not associated
     // in other-proc yet.
-    other : Option<*mut Handle>,
-    events : uint,
+    pub other : Option<*mut Handle>,
+    pulses : uint,
 }
 
 impl DictItem<uint> for Handle {
@@ -78,7 +80,7 @@ impl Handle {
             node : DictNode::new(id),
             process : process,
             other : None,
-            events : 0
+            pulses : 0
         }
     }
 
@@ -95,6 +97,26 @@ impl Handle {
         self.other = Some(other as *mut Handle);
         other.other = Some(self as *mut Handle);
     }
+
+    pub fn dissociate(&mut self) {
+        match self.other() {
+        Some(o) => o.other = None,
+        None => (),
+        }
+        self.other = None;
+    }
+
+    pub fn add_pulses(&mut self, pulses: uint) -> uint {
+        let res = self.pulses;
+        self.pulses |= pulses;
+        return res;
+    }
+
+    pub fn pop_pulses(&mut self) -> uint {
+        let res = self.pulses;
+        self.pulses = 0;
+        return res;
+    }
 }
 
 pub struct PendingPulse {
@@ -105,6 +127,15 @@ pub struct PendingPulse {
 impl DictItem<uint> for PendingPulse {
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, PendingPulse> {
         return &mut self.node;
+    }
+}
+
+impl PendingPulse {
+    fn new(handle: &mut Handle) -> PendingPulse {
+        PendingPulse {
+            node : DictNode::new(handle.id()),
+            handle: handle as *mut Handle
+        }
     }
 }
 
@@ -264,6 +295,8 @@ impl Process {
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
+        // FIXME Needs to remove from pending list too.
+        handle.dissociate();
         self.handles.remove(handle.node.key);
     }
 
@@ -272,19 +305,40 @@ impl Process {
         // TODO self.handles.unlink/relink/key_changed
     }
 
+    pub fn add_pending_handle(&mut self, handle: &mut Handle) {
+        self.pending.insert(heap_copy(PendingPulse::new(handle)));
+    }
+
+    pub fn pop_pending_handle<'a>(&mut self) -> Option<&'a mut Handle> {
+        match self.pending.pop() {
+        Some(p) => unsafe {
+            let h = (*p).handle;
+            free(p);
+            Some(&mut *h)
+        },
+        None => None,
+        }
+    }
+
     pub fn add_waiter(&mut self, other : &mut Process) {
-        self.waiters.append(other);
-        other.waiting_for = self as *mut Process;
+        if other.waiting_for.is_null() {
+            self.waiters.append(other);
+            other.waiting_for = self as *mut Process;
+        }
     }
 
     pub fn remove_waiter(&mut self, other : &mut Process) {
-        self.waiters.remove(other);
-        other.waiting_for = RawPtr::null();
+        if other.waiting_for == (self as *mut Process) {
+            self.waiters.remove(other);
+            other.waiting_for = RawPtr::null();
+        }
     }
 
     pub fn dump(&self) {
         write("proc ");
         con::writePtr(self);
+        write(" f=");
+        con::writeHex(self.flags);
         write(":\n");
 
         for (id,h) in self.handles.iter() {
@@ -292,6 +346,12 @@ impl Process {
             con::writeUInt(id);
             write(" -> proc ");
             con::writeMutPtr(h.process());
+            con::newline();
+        }
+
+        for p in self.waiters.iter() {
+            write("  waiter ");
+            con::writeMutPtr(p);
             con::newline();
         }
     }
