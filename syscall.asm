@@ -191,6 +191,7 @@ handle_irq_ %+ %1:
 	stub %1
 %endmacro
 
+align 4
 irq_handlers:
 
 %assign irq 32
@@ -266,6 +267,10 @@ proc handle_irq_generic, NOSECTION
 	swapgs
 	zero	eax
 	mov	rax, [gs:rax + gseg.proc]
+
+	; stack:
+	; saved_rax, saved_rdi, saved_rsi, [error], rip, cs, rflags, rsp, ss
+
 	pop	qword [rax - proc + proc.rax] ; The rax saved on entry
 	sub	rax, proc
 	pop	qword [rax + proc.rdi]
@@ -290,13 +295,27 @@ proc handle_irq_generic, NOSECTION
 	save_regs rax,  rcx,r8,r9,r10,r11
 	save_regs rax,  rbp,rbx,r12,r13,r14,r15
 
+.irq_entry:
+	add	rsp, 0xfff
+	and	sp, ~0xfff
+
 	; Now rdi = vector, rsi = error (or 0)
 	extern	irq_entry
 	jmp	irq_entry
 
 .kernel_fault:
+	zero	eax
+	mov	rax, [gs:rax + gseg.proc]
+	test	rax, rax
+	jz	.from_idle
+
 	cli
 	hlt
+
+.from_idle:
+	; saved_rax, saved_rdi, saved_rsi, vector, [error], rip, cs, rflags, rsp, ss
+	mov	rdi, [rsp + 24]
+	jmp	.irq_entry
 
 ; slowret: all registers are currently unknown, load *everything* from process
 ; (in rdi), then iretq
