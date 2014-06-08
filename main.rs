@@ -137,7 +137,12 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
         abort("kernel page fault\n");
     }
 
-    let back = p.aspace().find_add_backing(x86::cr2() & !0xfff);
+    let fault_addr = x86::cr2();
+    if (fault_addr as int) < 0 {
+        abort("fault with kernel-space addr");
+    }
+
+    let back = p.aspace().find_add_backing(fault_addr & !0xfff);
     // FIXME should return e.g. Option<> so we can detect failures better than
     // just aborting in find_add_backing.
     p.aspace().add_pte(back.vaddr(), back.pte());
