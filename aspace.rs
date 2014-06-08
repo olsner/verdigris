@@ -1,6 +1,8 @@
 use core::prelude::*;
 use core::mem::transmute;
 
+use alloc;
+
 use con;
 use con::write;
 use cpu;
@@ -274,14 +276,15 @@ fn get_alloc_pt(table : *mut PML4, mut index : uint, flags : uint) -> *mut PageT
 }
 
 impl AddressSpace {
-    pub fn new() -> AddressSpace {
-        AddressSpace {
-            pml4 : alloc_pml4(),
-            count : 1,
-            mapcards : Dict::empty(),
-            backings : Dict::empty(),
-            sharings : Dict::empty()
-        }
+    fn init(&mut self) {
+        self.pml4 = alloc_pml4();
+        self.count = 1;
+    }
+
+    pub fn new() -> *mut AddressSpace {
+        let res = unsafe { &mut *alloc::<AddressSpace>() };
+        res.init();
+        res as *mut AddressSpace
     }
 
     pub fn cr3(&self) -> uint {
