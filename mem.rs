@@ -6,6 +6,7 @@ use con;
 use con::Console;
 use con::Writer;
 use con::write;
+use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
@@ -15,6 +16,8 @@ use util::abort;
 use mem::framestack::*;
 
 static log_alloc : bool = false;
+static log_memory_map : bool = false;
+static log_memtest : bool = false;
 static mem_stats : bool = true;
 
 pub mod framestack {
@@ -35,8 +38,8 @@ pub mod framestack {
         }
     }
 
-    pub fn store(p : FreeFrameP) -> FreeFrameS {
-        from_option(p, none)
+    pub fn store<T>(p : Option<*mut T>) -> *mut T {
+        from_option(p, 0 as *mut T)
     }
 
     pub fn push_frame<T>(head : &mut FreeFrameS, frame : *mut T) {
@@ -115,13 +118,15 @@ impl Global {
             if item.item_type != mboot::MemoryTypeMemory as u32 {
                 continue;
             }
-//          newline();
-//          writePHex(item.start as uint);
-//          newline();
-//          writePHex(item.length as uint);
-//          newline();
-//          writeUInt(item.item_type as uint);
-//          newline();
+            if log_memory_map {
+                write("start=");
+                con::writePHex(item.start as uint);
+                write(" length=");
+                con::writePHex(item.length as uint);
+                write(" type=");
+                con::writeUInt(item.item_type as uint);
+                con::newline();
+            }
             for p in range_step(item.start, item.start + item.length, 4096) {
                 if p as uint > min_addr {
                     self.num_used = 1;
@@ -215,28 +220,38 @@ impl PerCpu {
         PerCpu { free : none }
     }
 
-    pub fn alloc_frame(&mut self) -> Option<*mut u8> {
+    #[inline(never)]
+    pub fn alloc_frame_(&mut self) -> *mut u8 {
         match pop_frame(&mut self.free) {
-            Some(page) => { return Some(page as *mut u8); }
+            Some(page) => return page as *mut u8,
             None => {}
         }
         self.free = store(get().alloc_frame());
         return self.steal_frame();
     }
 
-    pub fn steal_frame(&mut self) -> Option<*mut u8> {
+    pub fn steal_frame(&mut self) -> *mut u8 {
         match get().alloc_frame() {
-            Some(page) => Some(page as *mut u8),
-            None => None
+            Some(page) => page as *mut u8,
+            None => RawPtr::null()
+        }
+    }
+
+    #[inline(always)]
+    pub fn alloc_frame(&mut self) -> Option<*mut u8> {
+        let res = self.alloc_frame_();
+        if res.is_null() {
+            None
+        } else {
+            Some(res)
         }
     }
 
     #[inline(never)]
     pub fn alloc_frame_panic<T>(&mut self) -> *mut T {
-        match self.alloc_frame() {
-            Some(page) => page as *mut T,
-            None => abort("OOM")
-        }
+        let res = self.alloc_frame_();
+        if res.is_null() { abort("OOM") }
+        res as *mut T
     }
 
     pub fn free_frame(&mut self, page : *mut u8) {
@@ -245,32 +260,38 @@ impl PerCpu {
 
     pub fn test(&mut self) {
         let mut head = none;
-//      let mut count = 0;
+        let mut count = 0;
         loop {
-            let p = self.alloc_frame();
-//          write("Allocation #");
-//          writeUInt(count);
-//          write(": ");
-//          writePtr(from_option(p, 0 as *mut u8) as *u8);
-//          newline();
-//          get().stat();
-            match p {
-                Some(pp) => push_frame(&mut head, pp),
-                None => break
+            let p = self.alloc_frame_();
+            if log_memtest {
+                write("Allocation #");
+                writeUInt(count);
+                write(": ");
+                con::writeMutPtr(p);
+                con::newline();
+                get().stat();
             }
-//          count += 1;
+            if p.is_null() {
+                break;
+            }
+            push_frame(&mut head, p);
+            count += 1;
         }
-//      write("Allocated everything: ");
-//      writeUInt(count);
-//      write(" pages\n");
-//      get().stat();
+        if log_memtest {
+            write("Allocated everything: ");
+            writeUInt(count);
+            write(" pages\n");
+            get().stat();
+        }
         loop {
-//          write("Allocation #");
-//          writeUInt(count);
-//          write(": ");
-//          writePtr(from_option(head, 0 as *mut FreeFrame) as *u8);
-//          newline();
-//          get().stat();
+            if log_memtest {
+                write("Allocation #");
+                writeUInt(count);
+                write(": ");
+                con::writeMutPtr(head);
+                con::newline();
+                get().stat();
+            }
             match pop_frame(&mut head) {
                 Some(p) => self.free_frame(p as *mut u8),
                 None => break
