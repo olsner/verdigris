@@ -17,6 +17,8 @@ static log_transfer_message : bool = false;
 static log_portio : bool = false;
 static log_hmod : bool = false;
 static log_map : bool = false;
+static log_pfault : bool = false;
+static log_grant : bool = false;
 
 static log_recv : bool = false;
 static log_ipc : bool = false;
@@ -41,6 +43,10 @@ pub mod nr {
     pub static MSG_KIND_MASK : uint = 0x300;
     pub static MSG_KIND_SEND : uint = 0x000;
     pub static MSG_KIND_CALL : uint = 0x100;
+
+    pub fn call(msg: uint) -> uint {
+        msg | MSG_KIND_CALL
+    }
 }
 
 // Note: tail-called from the syscall code, "return" by switching to a process.
@@ -67,17 +73,20 @@ pub fn syscall(
     RECV => ipc_recv(p, arg0),
     MAP => syscall_map(p, arg0, arg1, arg2, arg3, arg4),
     PFAULT => syscall_pfault(p, arg1, arg2), // arg0 is always 0
+    // unmap
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
-    PORTIO => syscall_portio(p, arg0, arg1, arg2),
-    PULSE => syscall_pulse(p, arg0, arg1),
+    //newproc
     WRITE => {
         con::putc(arg0 as u8 as char);
         syscall_return(p, 0);
     },
+    PORTIO => syscall_portio(p, arg0, arg1, arg2),
+    GRANT => syscall_grant(p, arg0, arg1, arg2),
+    PULSE => syscall_pulse(p, arg0, arg1),
     _ if nr >= USER => {
         match nr & MSG_KIND_MASK {
-            MSG_KIND_CALL => ipc_call(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
-            MSG_KIND_SEND => ipc_send(p, nr & MSG_MASK, arg0, arg1, arg2, arg3, arg4, arg5),
+            MSG_KIND_CALL => ipc_call(p, nr, arg0, arg1, arg2, arg3, arg4, arg5),
+            MSG_KIND_SEND => ipc_send(p, nr, arg0, arg1, arg2, arg3, arg4, arg5),
             _ => abort("Unknown IPC kind")
         }
     },
@@ -471,22 +480,100 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
     syscall_return(p, offset);
 }
 
+#[inline(never)]
 fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
     vaddr &= !0xfff;
 
     // set fault address
     p.fault_addr = vaddr;
-    p.regs.rsi = vaddr;
-    p.regs.rdx = access & mapflag::RWX;
+    p.set(process::PFault);
+    let prot = access & mapflag::RWX;
     // Look up vaddr, get handle, offset and flags
     let card = p.aspace().mapcard_find_def(vaddr);
-    p.regs.rsi += card.offset; // proc.rsi is now translated into offset
-    p.regs.rdi = card.handle;
-    p.set(process::PFault);
+    let offset = card.paddr(vaddr);
+
+    if log_pfault {
+        con::writeMutPtr(p);
+        write(" fault: vaddr=");
+        con::writeHex(vaddr);
+        write(" handle=");
+        con::writeHex(card.handle);
+        write(" offset=");
+        con::writeHex(offset);
+        write(" prot=");
+        con::writeHex(prot);
+        con::newline();
+    }
 
     // Now do the equivalent of sendrcv with rdi=handle, rsi=offset, rdx=flags
+    ipc_call(p, nr::call(nr::PFAULT), card.handle, offset, prot, 0, 0, 0);
 }
 
+#[inline(never)]
+fn syscall_grant(p: &mut Process, id: uint, mut vaddr: uint, mut prot: uint) {
+    vaddr &= !0xfff;
+    prot &= mapflag::RWX;
+
+    if log_grant {
+        con::writeMutPtr(p);
+        write(" grant: id=");
+        con::writeHex(id);
+        write(" vaddr=");
+        con::writeHex(vaddr);
+        write(" prot=");
+        con::writeHex(prot);
+        con::newline();
+    }
+
+    let handle = p.find_handle(id).unwrap();
+    let other_proc = handle.process();
+    let other_handle = handle.other().unwrap();
+
+    if !other_proc.is(process::PFault) {
+        abort("Grant to non-faulting process");
+    }
+
+    let card = other_proc.aspace().mapcard_find_def(other_proc.fault_addr);
+
+	// check that our handle's remote handle's key matched the one in the
+	// mapping
+    if card.handle != other_handle.id() {
+        abort("Wrong handle granted");
+    }
+
+    prot &= card.flags();
+
+	// check that our offset matches what it should? we'd need to pass on
+	// the offset that we think we're granting, and compare that to the
+	// vaddr+offset on the recipient side....
+
+	// proc.rdi = our handle
+	// proc.rsi = our vaddr
+	// proc.rdx = our flags (& MAPFLAG_RWX)
+	// rbx + proc.fault_addr = their vaddr (+ flags?)
+
+    // TODO Recursive faults: if granting a page that needs IPC to fulfil, do
+    // something special.
+
+    // TODO If the recipient already has a backing at fault_addr, we need to
+    // release it.
+
+    other_proc.aspace().add_shared_backing(
+        other_proc.fault_addr,
+        prot,
+        p.aspace().share_backing(vaddr));
+
+    other_proc.unset(process::PFault);
+    if other_proc.is(process::InRecv) {
+        // Explicit pfault, do a send to respond (rather than a resume-from-
+        // interrupt as would otherwise be required).
+        ipc_send(p, nr::GRANT, id, other_proc.fault_addr, prot, 0, 0, 0);
+    } else {
+        abort("non-explicit fault");
+    }
+}
+
+#[inline(never)]
 fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
     let handle = p.find_handle(id);
     if log_hmod {

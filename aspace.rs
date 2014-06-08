@@ -147,6 +147,14 @@ impl Backing {
         }
     }
 
+    fn new_share(vaddrFlags: uint, share: &mut Sharing) -> Backing {
+        Backing {
+            as_node: DictNode::new(vaddrFlags),
+            parent_paddr : (share as *mut Sharing) as uint,
+            child_node: DListNode::new(),
+        }
+    }
+
     pub fn has_vaddr(&self, vaddr : uint) -> bool {
         return self.vaddr() == vaddr & !0xfff;
     }
@@ -173,10 +181,22 @@ impl Backing {
     }
 
     pub fn pte(&self) -> uint {
+        self.paddr() | self.pte_flags()
+    }
+
+    pub fn paddr(&self) -> uint {
         if (self.flags() & mapflag::Phys) != 0 {
-            return self.parent_paddr | self.pte_flags();
+            self.parent_paddr
         } else {
-            abort("pte: non-physical backings unimplemented");
+            self.parent().paddr
+        }
+    }
+
+    pub fn parent<'a>(&self) -> &Sharing {
+        if (self.flags() & mapflag::Phys) == 0 {
+            unsafe { &*(self.parent_paddr as *Sharing) }
+        } else {
+            abort("no parent: direct backing");
         }
     }
 }
@@ -193,6 +213,17 @@ pub struct Sharing {
 impl DictItem<uint> for Sharing {
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Sharing> {
         return &mut self.as_node;
+    }
+}
+
+impl Sharing {
+    fn new(aspace: *mut AddressSpace, back: &Backing) -> Sharing {
+        Sharing {
+            as_node: DictNode::new(back.vaddr()),
+            paddr : back.paddr(),
+            aspace: aspace,
+            children : DList::empty(),
+        }
     }
 }
 
@@ -306,6 +337,13 @@ impl AddressSpace {
         self.mapcard_set_(&start_card);
     }
 
+    pub fn add_shared_backing<'a>(&mut self, vaddr: uint, prot: uint,
+            share: &mut Sharing) -> &'a mut Backing {
+        let b = heap_copy(Backing::new_share(vaddr | prot, share));
+        share.children.append(b);
+        self.backings.insert(b)
+    }
+
     fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
     -> &'a Backing {
         let b = heap_copy(Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr)));
@@ -350,6 +388,11 @@ impl AddressSpace {
                 abort("No mapping found!");
             }
         }
+    }
+
+    pub fn share_backing<'a>(&mut self, vaddr: uint) -> &'a mut Sharing {
+        let back = self.find_add_backing(vaddr);
+        self.sharings.insert(heap_copy(Sharing::new(self, back)))
     }
 
     pub fn add_pte(&mut self, vaddr : uint, pte : uint) {
