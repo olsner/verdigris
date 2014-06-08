@@ -373,7 +373,7 @@ impl AddressSpace {
                     abort("No access!");
                 }
                 if card.handle == 0 {
-                    if (card.flags() & Anon) != 0 {
+                    if (card.flags() & DMA) == Anon {
                         return self.add_anon_backing(*card, vaddr);
                     } else if (card.flags() & Phys) != 0 {
                         return self.add_phys_backing(*card, vaddr);
