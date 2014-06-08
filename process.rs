@@ -295,8 +295,8 @@ impl Process {
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
-        // FIXME Needs to remove from pending list too.
         handle.dissociate();
+        self.pending.remove(handle.node.key);
         self.handles.remove(handle.node.key);
     }
 
