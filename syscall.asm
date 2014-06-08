@@ -288,11 +288,11 @@ proc handle_irq_generic, NOSECTION
 	pop	qword [rax + proc.rflags]
 	pop	qword [rax + proc.rsp]
 
-	; already saved: ax, dx, di, si
+	; already saved: ax, di, si
 	; caller-save: rax, rcx, rdx, rsi, rdi, r8-r11
 	; calee-save regs are not saved here because we assume that the
 	; compiler generated irq_entry code is correct.
-	save_regs rax,  rcx,r8,r9,r10,r11
+	save_regs rax,  rdx,rcx,r8,r9,r10,r11
 	save_regs rax,  rbp,rbx,r12,r13,r14,r15
 
 .irq_entry:
