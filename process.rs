@@ -1,5 +1,6 @@
 use core::prelude::*;
 
+use alloc;
 use free;
 
 use aspace::AddressSpace;
@@ -140,9 +141,6 @@ impl PendingPulse {
 }
 
 impl FXSaveRegs {
-    fn new() -> FXSaveRegs {
-        FXSaveRegs { space : [0, ..512] }
-    }
 }
 
 pub struct Regs {
@@ -166,12 +164,6 @@ pub struct Regs {
 }
 
 impl Regs {
-    fn new() -> Regs {
-        Regs {
-            rax: 0, rcx: 0, rdx: 0, rbx: 0, rsp: 0, rbp: 0, rsi: 0, rdi: 0,
-            r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
-        }
-    }
 }
 
 type Flags = uint;
@@ -220,23 +212,19 @@ impl DListItem for Process {
 }
 
 impl Process {
-    pub fn new(aspace : *mut AddressSpace) -> Process {
+    fn init(&mut self, aspace: *mut AddressSpace) {
         use x86::rflags;
         let init_flags = FastRet.mask();
-        Process {
-            regs : Regs::new(),
-            rip : 0, rflags: rflags::IF,
-            flags : init_flags, count : 0,
-            waiting_for : RawPtr::null(),
-            waiters : DList::empty(),
-            node : DListNode::new(),
-            cr3 : unsafe { (*aspace).cr3() },
-            aspace : aspace,
-            handles : Dict::empty(),
-            pending : Dict::empty(),
-            fault_addr : 0,
-            fxsave : FXSaveRegs::new()
-        }
+        self.flags = init_flags;
+        self.aspace = aspace;
+        self.cr3 = self.aspace().cr3();
+        self.rflags = rflags::IF;
+    }
+
+    pub fn new(aspace : *mut AddressSpace) -> *mut Process {
+        let res = unsafe { &mut *alloc::<Process>() };
+        res.init(aspace);
+        res as *mut Process
     }
 
     pub fn regs<'a>(&'a mut self) -> &'a mut Regs {

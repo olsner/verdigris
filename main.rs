@@ -370,7 +370,7 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     let end = (end_unaligned + 0xfff) & !0xfff;
     let start_page = start & !0xfff;
     let aspace : *mut AddressSpace = unsafe { transmute(box AddressSpace::new()) };
-    let ret : *mut Process = unsafe { transmute(box Process::new(aspace)) };
+    let ret : *mut Process = Process::new(aspace);
     unsafe {
         (*ret).regs().rsp = 0x100000;
         (*ret).rip = 0x100000 + (start & 0xfff);
