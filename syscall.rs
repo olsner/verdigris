@@ -44,13 +44,16 @@ pub mod nr {
 // Note: tail-called from the syscall code, "return" by switching to a process.
 #[no_mangle]
 pub fn syscall(
+    // Note weird ordering: syscall uses di,si,dx,8,9,10 but normal calls use
+    // di,si,dx,cx,8,9. The stub puts r10 in rcx.
     arg0: uint,
     arg1: uint,
     arg2: uint,
+    arg5: uint, // rcx = syscall r10
     arg3: uint,
     arg4: uint,
-    arg5: uint,
     nr : uint, // saved_rax
+    // TODO: since arg5 is almost unused, swap with rax
 ) -> ! {
     use syscall::nr::*;
 
