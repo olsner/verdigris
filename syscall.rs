@@ -455,13 +455,17 @@ fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
     syscall_return(p, 0);
 }
 
+#[inline(never)]
 fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut offset: uint, size: uint) {
     prot &= mapflag::UserAllowed;
     // TODO Check (and return failure) on:
     // * unaligned addr, offset, size (must be page-aligned)
     if (prot & mapflag::DMA) == mapflag::DMA {
         offset = match cpu().memory.alloc_frame() {
-            None => 0,
+            None => {
+                prot = 0;
+                addr
+            },
             Some(p) => p as uint - kernel_base,
         }
     }
