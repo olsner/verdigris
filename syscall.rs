@@ -374,8 +374,8 @@ fn ipc_recv(p : &mut Process, from : uint) {
 
 fn recv(p: &mut Process, handle: &mut Handle) {
     let rcpt = handle.process();
-    if rcpt.is(process::InSend) {
-        abort("recv-from-specific not implemented");
+    if rcpt.is(process::InSend) && handle.other().unwrap().id() == rcpt.regs.rdi {
+        transfer_message(p, rcpt);
     } else {
         rcpt.add_waiter(p);
     }
