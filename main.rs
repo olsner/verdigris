@@ -84,6 +84,10 @@ pub fn generic_irq_handler(vec : u8) {
         con::writeUInt(vec as uint);
         con::newline();
     }
+    // 32..47 are IRQ interrupts, 48 is APIC, others are unused.
+    if vec > 48 {
+        abort("Invalid IRQ vector");
+    }
 
     let c = cpu();
     let mask = 1 << (vec - 32);
