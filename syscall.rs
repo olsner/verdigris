@@ -418,6 +418,7 @@ fn recv_from_any(p : &mut Process, _id: uint) {
     unsafe { c.run(); }
 }
 
+#[inline(never)]
 fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
     if log_pulse {
         con::writeMutPtr(p);
@@ -428,8 +429,15 @@ fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
         con::newline();
     }
 
-    let h = p.find_handle(handle).unwrap();
+    let maybe_h = p.find_handle(handle);
+    if maybe_h.is_none() {
+        syscall_return(p, 0);
+    }
+    let h = maybe_h.unwrap();
     let q = h.process();
+    if h.other().is_none() {
+        syscall_return(p, 0);
+    }
     let g = h.other().unwrap();
     if can_deliver_pulse(q, g.id()) {
         cpu().queue(p);
