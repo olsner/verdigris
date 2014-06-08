@@ -2,8 +2,10 @@ use core::prelude::*;
 use core::iter::range_step;
 use core::intrinsics::set_memory;
 
+use con;
+use con::Console;
+use con::Writer;
 use con::write;
-use con::writeUInt;
 use mboot;
 use mboot::MemoryMapItem;
 use start32::PhysAddr;
@@ -11,6 +13,9 @@ use start32::MutPhysAddr;
 use util::abort;
 
 use mem::framestack::*;
+
+static log_alloc : bool = false;
+static mem_stats : bool = true;
 
 pub mod framestack {
     use core::prelude::*;
@@ -119,6 +124,7 @@ impl Global {
 //          newline();
             for p in range_step(item.start, item.start + item.length, 4096) {
                 if p as uint > min_addr {
+                    self.num_used = 1;
                     self.free_frame(MutPhysAddr(p as uint));
                     count += 1;
                 }
@@ -130,11 +136,19 @@ impl Global {
 
     pub fn free_frame(&mut self, vpaddr : *mut u8) {
         self.num_used -= 1;
+        if log_alloc {
+            write("free_frame: ");
+            con::writeMutPtr(vpaddr);
+            con::newline();
+        }
+        if mem_stats {
+            self.stat_line();
+        }
         push_frame(&mut self.garbage, vpaddr);
     }
 
     pub fn alloc_frame(&mut self) -> FreeFrameP {
-        match pop_frame(&mut self.free) {
+        let res = match pop_frame(&mut self.free) {
             Some(page) => {
                 self.num_used += 1;
                 Some(page)
@@ -147,7 +161,16 @@ impl Global {
                 },
                 None => { None }
             }
+        };
+        if log_alloc {
+            write("alloc_frame: ");
+            con::writeMutPtr(store(res));
+            con::newline();
         }
+        if mem_stats {
+            self.stat_line();
+        }
+        res
     }
 
     pub fn free_pages(&self) -> uint {
@@ -159,12 +182,26 @@ impl Global {
     }
 
     #[inline(never)]
+    fn stat_line(&self) {
+        use start32::kernel_base;
+        let mut con = Console::new((kernel_base + 0xb8000) as *mut u16);
+        con.debug = false;
+        con.color = 0x2f00;
+        con.write("Memory: ");
+        self.stat_(&mut con);
+    }
+
+    #[inline(never)]
     pub fn stat(&self) {
-        write("Free: ");
-        writeUInt(self.free_pages() * 4);
-        write("KiB, Used: ");
-        writeUInt(self.used_pages() * 4);
-        write("KiB\n");
+        self.stat_(con::get());
+    }
+
+    fn stat_(&self, con: &mut Console) {
+        con.write("Free: ");
+        con.writeUInt(self.free_pages() * 4);
+        con.write("KiB, Used: ");
+        con.writeUInt(self.used_pages() * 4);
+        con.write("KiB\n");
     }
 }
 

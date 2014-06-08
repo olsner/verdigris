@@ -121,19 +121,20 @@ impl Writer for DebugCon {
     }
 }
 
-static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, color : 0 };
+static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, color : 0, debug : true };
 
 pub struct Console {
     buffer : *mut u16,
     position : uint,
-    pub color : u16
+    pub color : u16,
+    pub debug : bool,
 }
 
-pub fn init(buffer : *mut u16, _width : uint, _height : uint) {
+pub fn init(buffer : *mut u16) {
     unsafe { con = Console::new(buffer); }
 }
 
-fn get() -> &'static mut Console {
+pub fn get() -> &'static mut Console {
     unsafe { &mut con }
 }
 
@@ -147,6 +148,7 @@ impl Console {
             buffer : buffer,
             position : 0,
             color : 0x0f00,
+            debug : true,
         }
     }
 
@@ -157,14 +159,14 @@ impl Console {
     }
 
     pub fn clear(&mut self) {
-        for i in range(0, 80*25 as uint) {
+        for i in range(0, 80*24 as uint) {
             self.putchar(i, 0);
         }
         self.position = 0;
     }
 
     fn width(&self) -> uint { 80 }
-    fn height(&self) -> uint { 25 }
+    fn height(&self) -> uint { 24 }
 
     fn clear_eol(&mut self) {
         let count = self.width() - (self.position % self.width());
@@ -201,7 +203,7 @@ impl Console {
 impl Writer for Console {
     #[inline(always)]
     fn putc(&mut self, c : char) {
-        debugc(c);
+        if self.debug { debugc(c); }
     }
 }
 
@@ -209,7 +211,7 @@ impl Writer for Console {
 impl Writer for Console {
     #[inline(never)]
     fn putc(&mut self, c : char) {
-        debugc(c);
+        if self.debug { debugc(c); }
         if c == '\n' {
             self.clear_eol();
         } else {

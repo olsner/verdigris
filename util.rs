@@ -4,7 +4,7 @@ use con::Writer;
 
 #[link_name="abort"] #[allow(dead_code)]
 pub extern "C" fn abort2(msg: &'static str) -> ! {
-    let mut con = Console::new((kernel_base + 0xb8000) as *mut u16);
+    let mut con = Console::new((kernel_base + 0xb80a0) as *mut u16);
     con.color = 0x4f00;
     con.write(msg);
     con.newline();

@@ -465,7 +465,7 @@ pub fn dump_runqueue(queue: &DList<Process>) {
 
 #[no_mangle]
 pub unsafe fn start64() -> ! {
-    con::init(MutPhysAddr(0xb8000), 80, 25);
+    con::init(MutPhysAddr(0xb80a0));
     con::clear();
     write("Hello World!\n");
     //writeMBInfo(start32::MultiBootInfo());
