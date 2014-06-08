@@ -61,6 +61,12 @@ impl MapCard {
         MapCard { as_node: DictNode::new(vaddr), handle: handle, offset: offset }
     }
 
+    /*fn init(&mut self, vaddr: uint, handle: uint, offset: uint) {
+        self.as_node.init(vaddr);
+        self.handle = handle;
+        self.offset = offset;
+    }*/
+
     pub fn vaddr(&self) -> uint {
         return self.as_node.key;
     }
@@ -130,31 +136,26 @@ fn alloc_frame_paddr() -> uint {
 }
 
 impl Backing {
-    fn new_phys(vaddrFlags : uint, phys_addr : uint) -> Backing {
+    fn new(vaddrFlags : uint, parent_paddr: uint) -> *mut Backing {
+        let res = alloc::<Backing>();
+        res.as_node.init(vaddrFlags);
+        res.parent_paddr = parent_paddr;
+        res as *mut Backing
+    }
+
+    fn new_phys(vaddrFlags : uint, phys_addr : uint) -> *mut Backing {
         if phys_addr & 0xfff != 0 {
             abort("Bad physical address in new_phys");
         }
-        Backing {
-            as_node: DictNode::new(vaddrFlags),
-            parent_paddr : phys_addr,
-            child_node: DListNode::new(),
-        }
+        Backing::new(vaddrFlags, phys_addr)
     }
 
-    fn new_anon(vaddrFlags : uint) -> Backing {
-        Backing {
-            as_node: DictNode::new(vaddrFlags | mapflag::Phys),
-            parent_paddr : alloc_frame_paddr(),
-            child_node: DListNode::new(),
-        }
+    fn new_anon(vaddrFlags : uint) -> *mut Backing {
+        Backing::new(vaddrFlags | mapflag::Phys, alloc_frame_paddr())
     }
 
-    fn new_share(vaddrFlags: uint, share: &mut Sharing) -> Backing {
-        Backing {
-            as_node: DictNode::new(vaddrFlags),
-            parent_paddr : (share as *mut Sharing) as uint,
-            child_node: DListNode::new(),
-        }
+    fn new_share(vaddrFlags: uint, share: &mut Sharing) -> *mut Backing {
+        Backing::new(vaddrFlags, (share as *mut Sharing) as uint)
     }
 
     pub fn has_vaddr(&self, vaddr : uint) -> bool {
@@ -219,13 +220,12 @@ impl DictItem<uint> for Sharing {
 }
 
 impl Sharing {
-    fn new(aspace: *mut AddressSpace, back: &Backing) -> Sharing {
-        Sharing {
-            as_node: DictNode::new(back.vaddr()),
-            paddr : back.paddr(),
-            aspace: aspace,
-            children : DList::empty(),
-        }
+    fn new(aspace: *mut AddressSpace, back: &Backing) -> *mut Sharing {
+        let res = alloc::<Sharing>();
+        res.as_node.init(back.vaddr());
+        res.paddr = back.paddr();
+        res.aspace = aspace;
+        res as *mut Sharing
     }
 }
 
@@ -282,7 +282,7 @@ impl AddressSpace {
     }
 
     pub fn new() -> *mut AddressSpace {
-        let res = unsafe { &mut *alloc::<AddressSpace>() };
+        let res = alloc::<AddressSpace>();
         res.init();
         res as *mut AddressSpace
     }
@@ -342,23 +342,21 @@ impl AddressSpace {
 
     pub fn add_shared_backing<'a>(&mut self, vaddr: uint, prot: uint,
             share: &mut Sharing) -> &'a mut Backing {
-        let b = heap_copy(Backing::new_share(vaddr | prot, share));
+        let b = Backing::new_share(vaddr | prot, share);
         share.children.append(b);
         self.backings.insert(b)
     }
 
     fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
     -> &'a Backing {
-        let b = heap_copy(Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr)));
-        self.backings.insert(b);
-        return unsafe { &*b };
+        let b = Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr));
+        &*self.backings.insert(b)
     }
 
     fn add_anon_backing<'a>(&mut self, card : MapCard, vaddr : uint)
     -> &'a Backing {
-        let b = heap_copy(Backing::new_anon(vaddr | card.flags()));
-        self.backings.insert(b);
-        return unsafe { &*b };
+        let b = Backing::new_anon(vaddr | card.flags());
+        &*self.backings.insert(b)
     }
 
     pub fn find_add_backing<'a>(&mut self, vaddr : uint) -> &'a Backing {
@@ -395,7 +393,7 @@ impl AddressSpace {
 
     pub fn share_backing<'a>(&mut self, vaddr: uint) -> &'a mut Sharing {
         let back = self.find_add_backing(vaddr);
-        self.sharings.insert(heap_copy(Sharing::new(self, back)))
+        self.sharings.insert(Sharing::new(self, back))
     }
 
     pub fn add_pte(&mut self, vaddr : uint, pte : uint) {

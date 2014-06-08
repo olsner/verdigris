@@ -10,7 +10,6 @@ use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
-use mem::heap_copy;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -76,13 +75,15 @@ impl DictItem<uint> for Handle {
 }
 
 impl Handle {
-    pub fn new(id : uint, process : *mut Process) -> Handle {
-        Handle {
-            node : DictNode::new(id),
-            process : process,
-            other : None,
-            pulses : 0
-        }
+    fn init(&mut self, id : uint, process : *mut Process) {
+        self.node.init(id);
+        self.process = process;
+    }
+
+    pub fn new(id : uint, process : *mut Process) -> *mut Handle {
+        let res = alloc::<Handle>();
+        res.init(id, process);
+        res as *mut Handle
     }
 
     pub fn id(&self) -> uint { self.node.key }
@@ -132,11 +133,11 @@ impl DictItem<uint> for PendingPulse {
 }
 
 impl PendingPulse {
-    fn new(handle: &mut Handle) -> PendingPulse {
-        PendingPulse {
-            node : DictNode::new(handle.id()),
-            handle: handle as *mut Handle
-        }
+    fn new(handle: &mut Handle) -> *mut PendingPulse {
+        let res = alloc::<PendingPulse>();
+        res.node.init(handle.id());
+        res.handle = handle as *mut Handle;
+        res as *mut PendingPulse
     }
 }
 
@@ -222,7 +223,7 @@ impl Process {
     }
 
     pub fn new(aspace : *mut AddressSpace) -> *mut Process {
-        let res = unsafe { &mut *alloc::<Process>() };
+        let res = alloc::<Process>();
         res.init(aspace);
         res as *mut Process
     }
@@ -261,6 +262,7 @@ impl Process {
         }
     }
 
+    #[inline(never)]
     pub fn find_handle<'a>(&mut self, id : uint) -> Option<&'a mut Handle> {
         let res = self.handles.find(id);
         match res {
@@ -283,7 +285,7 @@ impl Process {
             Some(h) => self.delete_handle(h),
             None => ()
         }
-        self.handles.insert(heap_copy(Handle::new(id, other)))
+        self.handles.insert(Handle::new(id, other))
     }
 
     pub fn delete_handle(&mut self, handle : &mut Handle) {
@@ -298,7 +300,7 @@ impl Process {
     }
 
     pub fn add_pending_handle(&mut self, handle: &mut Handle) {
-        self.pending.insert(heap_copy(PendingPulse::new(handle)));
+        self.pending.insert(PendingPulse::new(handle));
     }
 
     pub fn pop_pending_handle<'a>(&mut self) -> Option<&'a mut Handle> {

@@ -321,8 +321,8 @@ pub fn malloc(size : uint) -> *mut u8 {
 }
 
 #[inline(always)]
-pub fn alloc<T>() -> *mut T {
-    malloc(size_of::<T>()) as *mut T
+pub fn alloc<T>() -> &mut T {
+    unsafe { &mut *(malloc(size_of::<T>()) as *mut T) }
 }
 
 pub fn free<T>(p : *mut T) {

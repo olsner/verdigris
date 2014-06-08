@@ -16,6 +16,10 @@ impl<K,V> DictNode<K,V> {
     pub fn new(key : K) -> DictNode<K, V> {
         DictNode { key : key, left : null(), right : null() }
     }
+
+    pub fn init(&mut self, key : K) {
+        self.key = key;
+    }
 }
 
 pub trait DictItem<K> {
@@ -31,6 +35,7 @@ fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
 }
 
 impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
+    #[allow(dead_code)]
     pub fn empty() -> Dict<K, V> {
         Dict { root : null() }
     }
