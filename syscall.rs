@@ -12,9 +12,11 @@ use start32::kernel_base;
 use util::abort;
 
 static log_syscall : bool = false;
+static log_unknown_syscall : bool = false;
 static log_transfer_message : bool = false;
 static log_portio : bool = false;
 static log_hmod : bool = false;
+static log_map : bool = false;
 
 static log_recv : bool = false;
 static log_ipc : bool = false;
@@ -80,7 +82,7 @@ pub fn syscall(
         }
     },
     _ => {
-        if log_syscall {
+        if log_syscall || log_unknown_syscall {
             write("syscall! nr=");
             con::writeUInt(nr);
             write(" from process ");
@@ -98,9 +100,11 @@ pub fn syscall(
     unsafe { cpu().run(); }
 }
 
+#[inline(never)]
 fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     arg3: uint, arg4: uint, arg5: uint) {
-    if log_ipc {
+    let log = log_ipc && to != 3;
+    if log {
         con::writeMutPtr(p);
         write(" ipc_call to ");
         con::writeUInt(to);
@@ -109,7 +113,7 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     let handle = p.find_handle(to);
     match handle {
     Some(h) => {
-        if log_ipc {
+        if log {
             write("==> process ");
             con::writeMutPtr(h.process());
             con::newline();
@@ -122,7 +126,7 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     },
     None => abort("ipc_call: no recipient")
     }
-    if log_ipc {
+    if log {
         write("ipc_call: blocked\n");
     }
 }
@@ -301,12 +305,13 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
     p.add_waiter(sender)
 }
 
+#[inline(never)]
 fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         arg3: uint, arg4: uint, arg5: uint) {
-    if log_ipc {
+    if log_ipc && to != 3 {
         con::writeMutPtr(p);
         write(" ipc_send to ");
-        con::writeUInt(to);
+        con::writeHex(to);
 //        write(" ==>");
 //        con::writeMutPtr(p.find_handle(to).unwrap().process());
         con::newline();
@@ -325,6 +330,7 @@ fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
     }
 }
 
+#[inline(never)]
 fn ipc_recv(p : &mut Process, from : uint) {
     let mut handle = None;
     if from != 0 {
@@ -441,6 +447,20 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
             None => 0,
             Some(p) => p as uint - kernel_base,
         }
+    }
+
+    if log_map {
+        write("map: handle=");
+        con::writeHex(handle);
+        write(" prot=");
+        con::writeHex(prot);
+        write(" addr=");
+        con::writeHex(addr);
+        write(" size=");
+        con::writeHex(size);
+        write(" offset=");
+        con::writeHex(offset);
+        con::newline();
     }
 
     p.aspace().map_range(addr, addr + size, handle, (offset - addr) | prot);
