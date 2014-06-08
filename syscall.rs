@@ -130,7 +130,7 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
 
         p.set(process::InSend);
         p.set(process::InRecv);
-        p.regs.rdi = to;
+        p.regs().rdi = to;
         send_or_block(p, h, msg, arg1, arg2, arg3, arg4, arg5);
     },
     None => abort("ipc_call: no recipient")
@@ -141,8 +141,8 @@ fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
 }
 
 fn transfer_set_handle(target: &mut Process, source: &mut Process) {
-    let mut rcpt = target.regs.rdi;
-    let from = source.regs.rdi;
+    let mut rcpt = target.regs().rdi;
+    let from = source.regs().rdi;
 
     let h = source.find_handle(from).unwrap();
     if rcpt == 0 {
@@ -184,12 +184,12 @@ fn transfer_set_handle(target: &mut Process, source: &mut Process) {
         write("transfer_set_handle: rcpt=");
         con::writeHex(rcpt);
         write(" for ");
-        con::writeHex(target.regs.rdi);
+        con::writeHex(target.regs().rdi);
         write(" from ");
         con::writeHex(from);
         con::newline();
     }
-    target.regs.rdi = rcpt;
+    target.regs().rdi = rcpt;
 }
 
 fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
@@ -209,13 +209,13 @@ fn transfer_message(target: &mut Process, source: &mut Process) -> ! {
     // c.ipc_return(target, transfer_set_handle(...), source)
     // after updating source process runnability and state.
 
-    target.regs.rax = source.regs.rax;
+    target.regs().rax = source.regs().rax;
     // rdi is set by transfer_set_handle
-    target.regs.rsi = source.regs.rsi;
-    target.regs.rdx = source.regs.rdx;
-    target.regs.r8 = source.regs.r8;
-    target.regs.r9 = source.regs.r9;
-    target.regs.r10 = source.regs.r10;
+    target.regs().rsi = source.regs().rsi;
+    target.regs().rdx = source.regs().rdx;
+    target.regs().r8 = source.regs().r8;
+    target.regs().r9 = source.regs().r9;
+    target.regs().r10 = source.regs().r10;
 
     target.unset(process::InRecv);
     target.unset(process::FastRet);
@@ -256,15 +256,16 @@ pub fn try_deliver_irq(p : &mut Process) {
 }
 
 pub fn can_deliver_pulse(p : &mut Process, rcpt: uint) -> bool {
+    let rdi = p.regs().rdi;
     p.ipc_state() == process::InRecv.mask() &&
     // If it's a receive from (wrong) specific, we can't deliver now.
     // Otherwise, both fresh and 0 is OK.
-    (p.regs.rdi == rcpt || !p.find_handle(p.regs.rdi).is_some())
+    (rdi == rcpt || !p.find_handle(rdi).is_some())
 }
 
 fn deliver_pulse(p: &mut Process, rcpt: uint, pulses: uint) -> ! {
-    p.regs.rdi = rcpt;
-    p.regs.rsi = pulses;
+    p.regs().rdi = rcpt;
+    p.regs().rsi = pulses;
     // See comment in transfer_message about special ipc-return
     p.unset(process::FastRet);
     p.unset(process::InRecv);
@@ -278,13 +279,13 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
     // Save regs - either we'll copy these in transfer_message or we'll
     // need to store them until later on when the transfer can finish.
     // FIXME: The instant transfer_message path should be able to avoid this.
-    sender.regs.rax = msg;
-    sender.regs.rdi = h.id();
-    sender.regs.rsi = arg1;
-    sender.regs.rdx = arg2;
-    sender.regs.r10 = arg3;
-    sender.regs.r8 = arg4;
-    sender.regs.r9 = arg5;
+    sender.regs().rax = msg;
+    sender.regs().rdi = h.id();
+    sender.regs().rsi = arg1;
+    sender.regs().rdx = arg2;
+    sender.regs().r10 = arg3;
+    sender.regs().r8 = arg4;
+    sender.regs().r9 = arg5;
 
     let other_id = match h.other() {
         Some(g) => g.id(),
@@ -293,7 +294,7 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
 
     // p is the recipient, the sender is in g.process().
     if p.ipc_state() == process::InRecv.mask() {
-        let rcpt = h.process().regs.rdi;
+        let rcpt = h.process().regs().rdi;
         // Check the receiving process' receipt handle
         //   0 ==> transfer
         //   !0, connected to our handle ==> transfer
@@ -353,7 +354,7 @@ fn ipc_recv(p : &mut Process, from : uint) {
     }
 
     p.set(process::InRecv);
-    p.regs.rdi = from;
+    p.regs().rdi = from;
     match handle {
         Some(h) => {
             if log_recv {
@@ -374,7 +375,7 @@ fn ipc_recv(p : &mut Process, from : uint) {
 
 fn recv(p: &mut Process, handle: &mut Handle) {
     let rcpt = handle.process();
-    if rcpt.is(process::InSend) && handle.other().unwrap().id() == rcpt.regs.rdi {
+    if rcpt.is(process::InSend) && handle.other().unwrap().id() == rcpt.regs().rdi {
         transfer_message(p, rcpt);
     } else {
         rcpt.add_waiter(p);

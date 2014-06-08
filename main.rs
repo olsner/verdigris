@@ -127,7 +127,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
         write(" cr2=");
         con::writePHex(x86::cr2());
         write(" rip=");
-        con::writePHex(p.regs.rip as uint);
+        con::writePHex(p.rip as uint);
         write(" in process ");
         con::writeMutPtr(p);
         con::newline();
@@ -232,7 +232,7 @@ impl PerCpu {
             write("switch_to ");
             con::writeMutPtr(p);
             write(" rip=");
-            con::writeHex(p.regs.rip as uint);
+            con::writeHex(p.rip as uint);
             if p.is(process::FastRet) {
                 write(" fastret");
             }
@@ -251,14 +251,15 @@ impl PerCpu {
         }
         if p.is(process::FastRet) {
             p.unset(process::FastRet);
-            fastret(p, p.regs.rax);
+            let rax = p.regs().rax;
+            fastret(p, rax);
         } else {
             slowret(p);
         }
     }
 
     fn syscall_return(&mut self, p: &mut Process, rax : uint) -> ! {
-        p.regs.rax = rax;
+        p.regs().rax = rax;
         unsafe { self.switch_to(p); }
     }
 
@@ -371,8 +372,8 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     let aspace : *mut AddressSpace = unsafe { transmute(box AddressSpace::new()) };
     let ret : *mut Process = unsafe { transmute(box Process::new(aspace)) };
     unsafe {
-        (*ret).regs.rsp = 0x100000;
-        (*ret).regs.rip = 0x100000 + (start & 0xfff);
+        (*ret).regs().rsp = 0x100000;
+        (*ret).rip = 0x100000 + (start & 0xfff);
     }
 
     unsafe {

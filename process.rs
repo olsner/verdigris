@@ -163,18 +163,13 @@ pub struct Regs {
     pub r13 : uint,
     pub r14 : uint,
     pub r15 : uint,
-
-    pub rip : uint,
-    pub rflags : uint,
 }
 
 impl Regs {
     fn new() -> Regs {
-        use x86::rflags;
         Regs {
             rax: 0, rcx: 0, rdx: 0, rbx: 0, rsp: 0, rbp: 0, rsi: 0, rdi: 0,
             r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
-            rip : 0, rflags : rflags::IF
         }
     }
 }
@@ -182,7 +177,10 @@ impl Regs {
 type Flags = uint;
 
 pub struct Process {
-    pub regs : Regs,
+    // Regs must be first since it's used by assembly code.
+    regs : Regs,
+    pub rip : uint,
+    pub rflags : uint,
     // Physical address of PML4 to put in CR3
     pub cr3 : uint,
 
@@ -223,9 +221,11 @@ impl DListItem for Process {
 
 impl Process {
     pub fn new(aspace : *mut AddressSpace) -> Process {
+        use x86::rflags;
         let init_flags = FastRet.mask();
         Process {
             regs : Regs::new(),
+            rip : 0, rflags: rflags::IF,
             flags : init_flags, count : 0,
             waiting_for : RawPtr::null(),
             waiters : DList::empty(),
@@ -237,6 +237,10 @@ impl Process {
             fault_addr : 0,
             fxsave : FXSaveRegs::new()
         }
+    }
+
+    pub fn regs<'a>(&'a mut self) -> &'a mut Regs {
+        &mut self.regs
     }
 
     #[inline]
