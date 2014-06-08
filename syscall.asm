@@ -269,18 +269,20 @@ proc handle_irq_generic, NOSECTION
 	mov	rax, [gs:rax + gseg.proc]
 
 	; stack:
-	; saved_rax, saved_rdi, saved_rsi, [error], rip, cs, rflags, rsp, ss
+	; saved_rax, saved_rdi, saved_rsi, vector, [error], rip, cs, rflags, rsp, ss
 
 	pop	qword [rax - proc + proc.rax] ; The rax saved on entry
 	sub	rax, proc
 	pop	qword [rax + proc.rdi]
 	pop	qword [rax + proc.rsi]
-	mov	rsp, rsi ; skip stuff
-	mov	edi, [rsi - 8]
-	test	esi, 8
-	jz	.no_err
-	mov	esi, [rsi - 16]
-	xchg	edi, esi
+	pop	rdi ; vector
+	; rsp now points to error or frame, rsi should be error or zero
+	zero	esi
+	; size of stack frame is misaligned, meaning if it's aligned we have
+	; an error code.
+	test	esp, 8
+	jnz	.no_err
+	pop	rsi
 .no_err:
 
 	pop	qword [rax + proc.rip]
