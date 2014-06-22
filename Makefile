@@ -120,7 +120,7 @@ $(ZPIPE): zpipe.c
 RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
 $(OUT)/rust-core/core.bc: $(RUST_LIBDIR)/$(CORE_CRATE) $(ZPIPE)
 	@mkdir -p $(@D)
-	@ar p $< $(@F).deflate | $(ZPIPE) -d > $@
+	@ar p $< core.bytecode.deflate | $(ZPIPE) -d > $@
 
 $(OUT)/rust-core/$(CORE_CRATE): $(RUST_LIBDIR)/$(CORE_CRATE)
 	@mkdir -p $(@D)

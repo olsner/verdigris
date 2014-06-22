@@ -5,6 +5,7 @@
 // Adding pub mod (another fix for this warning) increases footprint, so just
 // disble it instead.
 #![allow(visible_private_types)]
+#![allow(non_snake_case_functions)]
 
 extern crate core;
 

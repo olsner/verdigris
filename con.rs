@@ -152,7 +152,7 @@ impl Console {
         }
     }
 
-    pub fn putchar(&mut self, position : uint, c : u16) {
+    pub fn putchar(&self, position : uint, c : u16) {
         unsafe {
             *self.buffer.offset(position as int) = c;
         }
@@ -175,7 +175,7 @@ impl Console {
     }
 
     #[inline(always)]
-    pub fn clear_range(&mut self, start : uint, length : uint) {
+    pub fn clear_range(&self, start : uint, length : uint) {
         unsafe {
             memset16(self.buffer.offset(start as int), self.color, length);
         }

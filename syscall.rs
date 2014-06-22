@@ -546,7 +546,8 @@ fn syscall_grant(p: &mut Process, id: uint, mut vaddr: uint, mut prot: uint) {
         abort("Grant to non-faulting process");
     }
 
-    let card = other_proc.aspace().mapcard_find_def(other_proc.fault_addr);
+    let fault_addr = other_proc.fault_addr;
+    let card = other_proc.aspace().mapcard_find_def(fault_addr);
 
 	// check that our handle's remote handle's key matched the one in the
 	// mapping
@@ -572,7 +573,7 @@ fn syscall_grant(p: &mut Process, id: uint, mut vaddr: uint, mut prot: uint) {
     // release it.
 
     other_proc.aspace().add_shared_backing(
-        other_proc.fault_addr,
+        fault_addr,
         prot,
         p.aspace().share_backing(vaddr));
 
