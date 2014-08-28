@@ -2,6 +2,8 @@
 #![no_std]
 #![feature(globs)]
 #![feature(asm)]
+#![feature(lang_items)]
+#![feature(intrinsics)]
 // Adding pub mod (another fix for this warning) increases footprint, so just
 // disble it instead.
 #![allow(visible_private_types)]
@@ -30,6 +32,7 @@ mod aspace;
 mod con;
 mod dict;
 mod dlist;
+#[allow(dead_code)]
 mod mboot;
 mod mem;
 mod process;
@@ -48,7 +51,7 @@ static log_idle : bool = false;
 static mem_test : bool = false;
 
 #[allow(dead_code)]
-fn writeMBInfo(infop : *mboot::Info) {
+fn writeMBInfo(infop : *const mboot::Info) {
     con::write("Multiboot info at ");
     con::writePtr(infop);
     con::putc('\n');
@@ -67,7 +70,7 @@ fn writeMBInfo(infop : *mboot::Info) {
         con::write("MB total.\n");
     }
     if info.has(mboot::CommandLine) {
-        let cmdline : *u8 = PhysAddr(info.cmdline as uint);
+        let cmdline : *const u8 = PhysAddr(info.cmdline as uint);
         con::write("Command line @");
         con::writePtr(cmdline);
         con::write(" (");
@@ -91,7 +94,7 @@ pub fn generic_irq_handler(vec : u8) {
     }
 
     let c = cpu();
-    let mask = 1 << (vec - 32);
+    let mask = 1 << (vec as uint - 32);
     if c.irq_delayed & mask != 0 {
         write("IRQ: already delayed\n");
         return;
@@ -167,6 +170,7 @@ pub fn idle() -> ! {
 
 pub struct PerCpu {
     selfp : *mut PerCpu,
+    #[allow(dead_code)] // used from assembly code
     stack : *mut u8,
     process : Option<&'static mut Process>,
 
@@ -296,10 +300,10 @@ impl PerCpu {
 // NB: One of the funky guarantees that Rust gives/requires is that there is
 // at most one &mut reference to the same thing at any one time. This function
 // can't quite guarantee that...
-pub fn cpu() -> &mut PerCpu {
+pub fn cpu<'a>() -> &'a mut PerCpu {
     unsafe {
         let mut ret : *mut PerCpu;
-        asm!("movq %gs:($1), $0" : "=r"(ret) : "r"(0));
+        asm!("movq %gs:($1), $0" : "=r"(ret) : "r"(0u));
         return &mut *ret;
     }
 }
@@ -322,7 +326,7 @@ pub fn malloc(size : uint) -> *mut u8 {
 }
 
 #[inline(always)]
-pub fn alloc<T>() -> &mut T {
+pub fn alloc<'a, T>() -> &'a mut T {
     unsafe { &mut *(malloc(size_of::<T>()) as *mut T) }
 }
 

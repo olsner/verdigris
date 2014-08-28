@@ -1,9 +1,8 @@
-Last tested with rust nightly 2014-06-21. If newer nightlies don't work, I
-believe the 0.11 release is fairly close.
+Last tested with rust nightly 2014-08-28.
 
 Build by running make. RUST_PREFIX can be set to the path of your rust install.
 The default value of RUST_PREFIX is "rust-nightly" - you can make that a
-symlink to wherever you have the 2014-06-21 nightly.
+symlink to wherever you have the appropriate nightly unpacked.
 
 To run with user-space programs, check out https://github.com/olsner/os, copy
 out/kernel into os/out/grub/ (after building verdigris) and build the os/ repo.

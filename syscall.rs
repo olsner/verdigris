@@ -274,8 +274,6 @@ fn deliver_pulse(p: &mut Process, rcpt: uint, pulses: uint) -> ! {
 
 fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
         arg1: uint, arg2: uint, arg3: uint, arg4: uint, arg5: uint) {
-    let p = h.process();
-
     // Save regs - either we'll copy these in transfer_message or we'll
     // need to store them until later on when the transfer can finish.
     // FIXME: The instant transfer_message path should be able to avoid this.
@@ -292,6 +290,7 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
         None => 0,
     };
 
+    let p = h.process();
     // p is the recipient, the sender is in g.process().
     if p.ipc_state() == process::InRecv.mask() {
         let rcpt = h.process().regs().rdi;
@@ -374,8 +373,9 @@ fn ipc_recv(p : &mut Process, from : uint) {
 }
 
 fn recv(p: &mut Process, handle: &mut Handle) {
+    let other_id = handle.other().unwrap().id();
     let rcpt = handle.process();
-    if rcpt.is(process::InSend) && handle.other().unwrap().id() == rcpt.regs().rdi {
+    if rcpt.is(process::InSend) && other_id == rcpt.regs().rdi {
         transfer_message(p, rcpt);
     } else {
         rcpt.add_waiter(p);

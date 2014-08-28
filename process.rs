@@ -87,8 +87,10 @@ impl Handle {
     }
 
     pub fn id(&self) -> uint { self.node.key }
-    pub fn process(&self) -> &mut Process { unsafe { &mut *self.process } }
-    pub fn other(&mut self) -> Option<&mut Handle> {
+    pub fn process<'a>(&self) -> &'a mut Process {
+        unsafe { &mut *self.process }
+    }
+    pub fn other<'a>(&mut self) -> Option<&'a mut Handle> {
         match self.other {
         Some(h) => Some(unsafe { &mut *h }),
         None => None,

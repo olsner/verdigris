@@ -1,5 +1,4 @@
 use core::prelude::*;
-use core::mem::transmute;
 
 use alloc;
 
@@ -197,7 +196,7 @@ impl Backing {
 
     pub fn parent<'a>(&self) -> &Sharing {
         if (self.flags() & mapflag::Phys) == 0 {
-            unsafe { &*(self.parent_paddr as *Sharing) }
+            unsafe { &*(self.parent_paddr as *const Sharing) }
         } else {
             abort("no parent: direct backing");
         }
@@ -275,6 +274,10 @@ fn get_alloc_pt(table : *mut PML4, mut index : uint, flags : uint) -> *mut PageT
     }
 }
 
+fn paddr_for_vpaddr<T>(vpaddr: *mut T) -> uint {
+    return vpaddr as uint - start32::kernel_base;
+}
+
 impl AddressSpace {
     fn init(&mut self) {
         self.pml4 = alloc_pml4();
@@ -288,8 +291,7 @@ impl AddressSpace {
     }
 
     pub fn cr3(&self) -> uint {
-        let vaddr : *PML4 = unsafe { transmute(self.pml4) };
-        return vaddr as uint - start32::kernel_base;
+        return paddr_for_vpaddr(self.pml4);
     }
 
     // FIXME This should return by-value and have a default value instead.

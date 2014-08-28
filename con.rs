@@ -5,11 +5,11 @@ use core::cmp::min;
 // beginning so we use this on overlapping ranges too.
 // (To avoid having to implement memmove.)
 extern "rust-intrinsic" {
-    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *T, count: uint);
+    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T, count: uint);
 }
 
 #[inline]
-unsafe fn copy_memory<T>(dst: *mut T, src: *T, count: uint) {
+unsafe fn copy_memory<T>(dst: *mut T, src: *const T, count: uint) {
     copy_nonoverlapping_memory(dst, src, count);
 }
 
@@ -31,7 +31,7 @@ pub trait Writer {
     #[inline(never)]
     fn write(&mut self, string : &str) {
         for i in range(0, string.len()) {
-            self.putc(string[i] as char);
+            self.putc(string.as_bytes()[i] as char);
         }
     }
 
@@ -47,7 +47,7 @@ pub trait Writer {
         self.writeUnsigned(0, false, 16, true, x);
     }
 
-    fn writePtr<T>(&mut self, x : *T) {
+    fn writePtr<T>(&mut self, x : *const T) {
         self.writePHex(x as uint);
     }
     fn writeMutPtr<T>(&mut self, x : *mut T) {
@@ -74,7 +74,7 @@ pub trait Writer {
         let mut num_ = num;
         loop {
             let i = num_ % base;
-            buf[len] = "0123456789abcdef"[i];
+            buf[len] = "0123456789abcdef".as_bytes()[i];
             len += 1;
             num_ /= base;
             if num_ == 0 { break; }
@@ -102,7 +102,7 @@ pub trait Writer {
     }
 
     #[inline(never)]
-    fn writeCStr(&mut self, c_str : *u8) {
+    fn writeCStr(&mut self, c_str : *const u8) {
         unsafe {
             let mut p = c_str;
             while *p != 0 {
@@ -185,7 +185,7 @@ impl Console {
     fn copy_back(&mut self, to : uint, from : uint, n : uint) {
         unsafe {
             let b = self.buffer;
-            copy_memory(b.offset(to as int), b.offset(from as int) as *u16, n);
+            copy_memory(b.offset(to as int), b.offset(from as int) as *const u16, n);
         }
     }
 
@@ -233,11 +233,11 @@ pub fn newline() { get().newline(); }
 pub fn putc(c : char) { get().putc(c); }
 #[inline(never)]
 pub fn write(string : &str) { get().write(string); }
-pub fn writeCStr(c_str : *u8) { get().writeCStr(c_str); }
+pub fn writeCStr(c_str : *const u8) { get().writeCStr(c_str); }
 pub fn writeHex(x : uint) { get().writeHex(x); }
 pub fn writeInt(x : int) { get().writeInt(x); }
 pub fn writePHex(x : uint) { get().writePHex(x); }
-pub fn writePtr<T>(x : *T) { get().writePtr(x); }
+pub fn writePtr<T>(x : *const T) { get().writePtr(x); }
 pub fn writeMutPtr<T>(x : *mut T) { get().writeMutPtr(x); }
 #[inline(never)]
 pub fn writeUInt(x : uint) { get().writeUInt(x); }

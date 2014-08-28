@@ -1,4 +1,5 @@
 #[packed]
+#[allow(dead_code)]
 pub struct Gdtr {
     limit : u16,
     base : uint,
@@ -53,7 +54,7 @@ use x86::lidt;
 static GatePresent : uint = 0x80;
 static GateTypeInterrupt : uint = 0x0e;
 
-pub fn entry(handler_ptr : *u8) -> Entry {
+pub fn entry(handler_ptr : *const u8) -> Entry {
     let handler = handler_ptr as uint;
     let low = (handler & 0xffff) | (seg::code << 16);
     let flags = GatePresent | GateTypeInterrupt;
@@ -71,9 +72,9 @@ pub fn limit(_table : &[Entry, ..49]) -> u16 {
     return 49 * 16 - 1;
 }
 
-pub unsafe fn load(table: *[Entry, ..49]) {
+pub unsafe fn load(table: *const [Entry, ..49]) {
     static mut idtr : Idtr = Idtr { base : 0, limit : 0 };
-    idtr.base = (table as *u8) as uint;
+    idtr.base = (table as *const u8) as uint;
     idtr.limit = limit(&*table);
     lidt(&idtr);
 }
@@ -108,10 +109,10 @@ pub unsafe fn init() {
         static irq_handlers : [u32, ..17];
     }
     static mut idt_table : [Entry, ..49] = [null_entry, ..49];
-    idt_table[7] = entry(handler_NM_stub as *u8);
-    idt_table[14] = entry(handler_PF_stub as *u8);
+    idt_table[7] = entry(handler_NM_stub as *const u8);
+    idt_table[14] = entry(handler_PF_stub as *const u8);
     for i in range(32 as uint,49) {
-        idt_table[i] = entry((&irq_handlers[i - 32]) as *u32 as *u8);
+        idt_table[i] = entry((&irq_handlers[i - 32]) as *const u32 as *const u8);
     }
     load(&idt_table);
 }

@@ -80,12 +80,12 @@ pub struct PerCpu {
 }
 
 struct MemoryMap {
-    addr : *u8,
-    end : *u8
+    addr : *const u8,
+    end : *const u8
 }
 
 impl MemoryMap {
-    fn new(addr : *u8, length : uint) -> MemoryMap {
+    fn new(addr : *const u8, length : uint) -> MemoryMap {
         return MemoryMap { addr : addr, end : unsafe { addr.offset(length as int) } }
     }
 }
@@ -93,7 +93,7 @@ impl MemoryMap {
 impl Iterator<MemoryMapItem> for MemoryMap {
     fn next(&mut self) -> Option<MemoryMapItem> {
         if self.addr < self.end { unsafe {
-            let item = *(self.addr as *MemoryMapItem);
+            let item = *(self.addr as *const MemoryMapItem);
             self.addr = self.addr.offset(4 + item.item_size as int);
             Some(item)
         } } else {
@@ -211,7 +211,7 @@ impl Global {
 }
 
 #[inline(always)]
-pub fn get() -> &mut Global {
+pub fn get<'a>() -> &'a mut Global {
     unsafe { &mut global }
 }
 
@@ -301,7 +301,7 @@ impl PerCpu {
 }
 
 extern "rust-intrinsic" {
-    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *T, count: uint);
+    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T, count: uint);
 }
 
 pub fn heap_copy<T>(x : T) -> *mut T {

@@ -6,10 +6,11 @@ OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
 # RUST_PREFIX must be set pointing to the prefix where a nice nightly is
-# installed. This was tested with the 2014-06-21 build.
+# installed. This was tested with the 2014-08-28 build.
 # Default: make a symlink rust-nightly in the project root, pointing to Rust.
 RUST_PREFIX ?= rust-nightly
 RUSTC := $(RUST_PREFIX)/bin/rustc
+export LD_LIBRARY_PATH=$(RUST_PREFIX)/lib
 CLANG ?= clang-3.5
 CC = $(CLANG)
 LLVM = -3.5
@@ -64,7 +65,7 @@ KERNEL_OBJS = $(addprefix $(OUT)/, runtime.o syscall.o amalgam.o)
 
 KERNEL_OBJS += start32.o
 
-CORE_CRATE := libcore-c5ed6fb4-0.11.0-pre.rlib
+CORE_CRATE := libcore-4e7c5e5c.rlib
 
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(HUSH_LD) $(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^ -Map $(@:.elf=.map)
@@ -120,7 +121,8 @@ $(ZPIPE): zpipe.c
 RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
 $(OUT)/rust-core/core.bc: $(RUST_LIBDIR)/$(CORE_CRATE) $(ZPIPE)
 	@mkdir -p $(@D)
-	@ar p $< core.bytecode.deflate | $(ZPIPE) -d > $@
+	ar p $< $(CORE_CRATE:lib%.rlib=%).bytecode.deflate | tail -c +24 | $(ZPIPE) -d > $@.tmp
+	mv $@.tmp $@
 
 $(OUT)/rust-core/$(CORE_CRATE): $(RUST_LIBDIR)/$(CORE_CRATE)
 	@mkdir -p $(@D)

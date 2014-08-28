@@ -11,22 +11,26 @@ extern {
     static kernel_pdp : [u64, ..512];
 }
 
-pub static kernel_base : uint = -(1 << 30) as uint;
+pub static kernel_base : uint = -(1u << 30) as uint;
 
 pub fn HighAddr<T>(obj : &T) -> &T {
-    unsafe { &*PhysAddr(obj as *T as uint) }
+    PhysAddrRef(obj as *const T as uint)
 }
 
 pub fn MutPhysAddr<T>(addr : uint) -> *mut T {
     (addr + kernel_base) as *mut T
 }
 
-pub fn PhysAddr<T>(addr : uint) -> *T {
-    (addr + kernel_base) as *T
+pub fn PhysAddr<T>(addr: uint) -> *const T {
+    (addr + kernel_base) as *const T
+}
+
+pub fn PhysAddrRef<'a, T>(addr : uint) -> &'a T {
+    unsafe { &*PhysAddr(addr) }
 }
 
 pub fn MultiBootInfo() -> &'static mboot::Info {
-    unsafe { &*PhysAddr(*HighAddr(&mbi_pointer) as uint) }
+    PhysAddrRef(*HighAddr(&mbi_pointer) as uint)
 }
 
 pub fn MemoryStart() -> uint {
@@ -34,7 +38,7 @@ pub fn MemoryStart() -> uint {
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {
-    unsafe { &*PhysAddr(&gdtr as *x86::Gdtr as uint) }
+    PhysAddrRef(&gdtr as *const x86::Gdtr as uint)
 }
 
 //pub fn OrigMultiBootInfo() -> *mboot::Info {
@@ -46,5 +50,5 @@ pub fn CleanPageMappings() {
 }
 
 pub fn kernel_pdp_addr() -> u64 {
-    return &kernel_pdp as *[u64, ..512] as u64;
+    return &kernel_pdp as *const [u64, ..512] as u64;
 }
