@@ -1,22 +1,11 @@
-#[packed]
+#[repr(packed)]
 #[allow(dead_code)]
 pub struct Gdtr {
     limit : u16,
     base : uint,
 }
-#[packed]
-pub struct Idtr {
-    limit : u16,
-    base : uint,
-}
-
-// FIXME Would like to use "m", but it seems to be impossible to get the right
-// thing sent.
 pub unsafe fn lgdt(gdtr : &Gdtr) {
-    asm!("lgdt ($0)" :: "r" (gdtr));
-}
-pub unsafe fn lidt(idtr : &Idtr) {
-    asm!("lidt ($0)" :: "r" (idtr));
+    asm!("lgdt $0" :: "*m" (*gdtr));
 }
 pub unsafe fn ltr(tr : uint) {
     asm!("ltr %ax" :: "{ax}"(tr));
@@ -48,8 +37,6 @@ pub mod idt {
 use core::prelude::*;
 
 use x86::seg;
-use x86::Idtr;
-use x86::lidt;
 
 static GatePresent : uint = 0x80;
 static GateTypeInterrupt : uint = 0x0e;
@@ -68,14 +55,25 @@ pub static null_entry : Entry = (0,0);
 pub type Entry = (u64,u64);
 pub type Table = [Entry, ..49];
 
+#[repr(packed)]
+#[allow(dead_code)]
+pub struct Idtr {
+    limit : u16,
+    base : *const Table,
+}
+
+pub unsafe fn lidt(idtr : &Idtr) {
+    asm!("lidt $0" :: "*m" (*idtr));
+}
 pub fn limit(_table : &[Entry, ..49]) -> u16 {
     return 49 * 16 - 1;
 }
 
 pub unsafe fn load(table: *const [Entry, ..49]) {
-    static mut idtr : Idtr = Idtr { base : 0, limit : 0 };
-    idtr.base = (table as *const u8) as uint;
-    idtr.limit = limit(&*table);
+    let idtr = Idtr {
+        limit : limit(&*table),
+        base : table,
+    };
     lidt(&idtr);
 }
 
