@@ -11,6 +11,7 @@ extern {
     static kernel_pdp : [u64, ..512];
 }
 
+#[allow(unsigned_negate)]
 pub static kernel_base : uint = -(1u << 30) as uint;
 
 pub fn HighAddr<T>(obj : &T) -> &T {
@@ -35,6 +36,13 @@ pub fn MultiBootInfo() -> &'static mboot::Info {
 
 pub fn MemoryStart() -> uint {
     *HighAddr(&memory_start) as uint
+}
+
+// End of (physical) memory usable is fixed by kernel_base. More memory and we
+// wrap around to null.
+#[allow(unsigned_negate)]
+pub fn MemoryEnd() -> uint {
+    -kernel_base
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {

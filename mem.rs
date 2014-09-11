@@ -107,7 +107,7 @@ fn clear<T>(page : *mut T) {
 }
 
 impl Global {
-    pub fn init(&mut self, info : &mboot::Info, min_addr : uint) {
+    pub fn init(&mut self, info : &mboot::Info, min_addr : uint, max_addr : uint) {
         if !info.has(mboot::MemoryMap) {
             return;
         }
@@ -115,9 +115,6 @@ impl Global {
         let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
         let mut count = 0;
         for item in mmap {
-            if item.item_type != mboot::MemoryTypeMemory as u32 {
-                continue;
-            }
             if log_memory_map {
                 write("start=");
                 con::writePHex(item.start as uint);
@@ -127,8 +124,12 @@ impl Global {
                 con::writeUInt(item.item_type as uint);
                 con::newline();
             }
+            if item.item_type != mboot::MemoryTypeMemory as u32 {
+                continue;
+            }
             for p in range_step(item.start, item.start + item.length, 4096) {
-                if p as uint > min_addr {
+                let addr = p as uint;
+                if min_addr <= addr && addr < max_addr {
                     self.num_used = 1;
                     self.free_frame(MutPhysAddr(p as uint));
                     count += 1;

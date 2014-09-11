@@ -486,7 +486,7 @@ pub unsafe fn start64() -> ! {
 
     idt::init();
 
-    mem::global.init(start32::MultiBootInfo(), start32::MemoryStart());
+    mem::global.init(start32::MultiBootInfo(), start32::MemoryStart(), start32::MemoryEnd());
     write("Memory initialized. ");
     mem::global.stat();
 
