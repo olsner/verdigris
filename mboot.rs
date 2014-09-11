@@ -116,7 +116,7 @@ pub struct Module {
     reserved    : u32,
 }
 
-#[packed]
+#[repr(packed)]
 pub struct MemoryMapItem {
     // Size of item (bytes), *not* including the item_size field
     pub item_size   : u32,
