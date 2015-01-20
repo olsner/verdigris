@@ -47,7 +47,7 @@ pub fn entry(handler_ptr : *const u8) -> Entry {
     let flags = GatePresent | GateTypeInterrupt;
     let high = (((handler >> 16) & 0xffff) << 16) | (flags << 8);
 
-    (low as u64 | (high as u64 << 32), handler as u64 >> 32)
+    (low as u64 | ((high as u64) << 32), handler as u64 >> 32)
 }
 
 pub static null_entry : Entry = (0,0);
