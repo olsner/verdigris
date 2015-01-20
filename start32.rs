@@ -8,7 +8,7 @@ extern {
     static memory_start : u32;
     //static orig_mbi_pointer : u32;
     static gdtr : x86::Gdtr;
-    static kernel_pdp : [u64, ..512];
+    static kernel_pdp : [u64; 512];
 }
 
 #[allow(unsigned_negate)]
@@ -58,5 +58,5 @@ pub fn CleanPageMappings() {
 }
 
 pub fn kernel_pdp_addr() -> u64 {
-    return &kernel_pdp as *const [u64, ..512] as u64;
+    return &kernel_pdp as *const [u64; 512] as u64;
 }

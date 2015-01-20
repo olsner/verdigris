@@ -17,7 +17,7 @@ pub struct FB {
     height      : u32,
     bpp         : u8,
     fbtype      : u8,
-    colors      : [u8, ..6],
+    colors      : [u8; 6],
 }
 
 #[allow(dead_code)]
@@ -77,7 +77,7 @@ pub struct Info {
     pub mods_addr   : u32,
 
 // 
-    syms        : [u32, ..4],
+    syms        : [u32; 4],
 
 // if has(MMap)
     pub mmap_length : u32,

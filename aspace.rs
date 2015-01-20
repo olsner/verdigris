@@ -228,7 +228,7 @@ impl Sharing {
     }
 }
 
-type PageTable = [u64, ..512];
+type PageTable = [u64; 512];
 type PML4 = PageTable;
 
 pub struct AddressSpace {

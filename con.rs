@@ -69,7 +69,7 @@ pub trait Writer {
         if show_base && base == 16 {
             self.write("0x");
         }
-        let mut buf : [u8, ..32] = [0, ..32];
+        let mut buf : [u8; 32] = [0; 32]; // TODO redundant type annotation?
         let mut len = 0;
         let mut num_ = num;
         loop {

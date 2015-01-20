@@ -55,7 +55,7 @@ impl FlagBit {
 // TODO Implement OR for FlagBit
 
 pub struct FXSaveRegs {
-    space : [u8, ..512]
+    space : [u8; 512]
 }
 
 pub struct Handle {

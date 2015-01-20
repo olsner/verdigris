@@ -53,7 +53,7 @@ pub fn entry(handler_ptr : *const u8) -> Entry {
 pub static null_entry : Entry = (0,0);
 
 pub type Entry = (u64,u64);
-pub type Table = [Entry, ..49];
+pub type Table = [Entry; 49];
 
 #[repr(packed)]
 #[allow(dead_code)]
@@ -65,11 +65,11 @@ pub struct Idtr {
 pub unsafe fn lidt(idtr : &Idtr) {
     asm!("lidt $0" :: "*m" (*idtr));
 }
-pub fn limit(_table : &[Entry, ..49]) -> u16 {
+pub fn limit(_table : &[Entry; 49]) -> u16 {
     return 49 * 16 - 1;
 }
 
-pub unsafe fn load(table: *const [Entry, ..49]) {
+pub unsafe fn load(table: *const [Entry; 49]) {
     let idtr = Idtr {
         limit : limit(&*table),
         base : table,
@@ -104,9 +104,9 @@ pub unsafe fn init() {
         fn handler_PF_stub();
         fn handler_NM_stub();
         // We can generate this, probably in less than 68 bytes?
-        static irq_handlers : [u32, ..17];
+        static irq_handlers : [u32; 17];
     }
-    static mut idt_table : [Entry, ..49] = [null_entry, ..49];
+    static mut idt_table : [Entry; 49] = [null_entry; 49];
     idt_table[7] = entry(handler_NM_stub as *const u8);
     idt_table[14] = entry(handler_PF_stub as *const u8);
     for i in range(32 as uint,49) {
