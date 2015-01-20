@@ -100,7 +100,7 @@ impl Info {
         self.flags & (flag as u32) != 0
     }
 
-    pub fn modules(&self, make_ptr : |uint| -> *const Module) -> &[Module] {
+    pub fn modules(&self, make_ptr : Fn(uint) -> *const Module) -> &[Module] {
         unsafe { transmute(Slice {
             data : make_ptr(self.mods_addr as uint),
             len : self.mods_count as uint
