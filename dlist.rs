@@ -1,4 +1,5 @@
 use core::prelude::*;
+use core::ptr;
 
 use util::abort;
 
@@ -25,8 +26,8 @@ pub trait DListItem {
     // single copy of the linking code.
 }
 
-pub fn not_null<U, T : RawPtr<U>>(p : T) -> bool { p.is_not_null() }
-fn null<T>() -> *mut T { RawPtr::null() }
+pub fn not_null<T : PtrExt>(p : T) -> bool { !p.is_null() }
+fn null<T>() -> *mut T { ptr::null_mut() }
 fn node<'a, T : DListItem>(p : *mut T) -> &'a mut DListNode<T> {
     unsafe { (*p).node() }
 }
@@ -41,7 +42,7 @@ impl<T : DListItem> DList<T> {
         if !(node(item).prev.is_null() && node(item).next.is_null()) {
             abort("appending item already in list");
         }
-        if self.tail.is_not_null() {
+        if !self.tail.is_null() {
             let tail = self.tail;
             self.tail = item;
             node(tail).next = item;
@@ -96,12 +97,12 @@ struct DListIter<'a, T> {
 
 impl<'a, T : DListItem> Iterator<&'a mut T> for DListIter<'a, T> {
     fn next(&mut self) -> Option<&'a mut T> {
-        if self.p.is_not_null() {
+        if self.p.is_null() {
+            None
+        } else {
             let res = self.p;
             self.p = node(res).next;
             unsafe { Some(&mut *res) }
-        } else {
-            None
         }
     }
 }

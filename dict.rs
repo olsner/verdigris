@@ -1,4 +1,5 @@
 use core::prelude::*;
+use core::ptr;
 
 use free;
 
@@ -29,7 +30,7 @@ pub trait DictItem<K> {
     // single copy of the linking code.
 }
 
-fn null<T>() -> *mut T { RawPtr::null() }
+fn null<T>() -> *mut T { ptr::null_mut() }
 fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
     unsafe { (*p).node() }
 }
@@ -85,7 +86,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
     pub fn remove(&mut self, key: K) {
         let mut p : *mut *mut V = &mut self.root;
         unsafe {
-            while (*p).is_not_null() {
+            while !(*p).is_null() {
                 let item = *p;
                 if node(item).key == key {
                     *p = node(item).right;
@@ -100,7 +101,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
     pub fn remove_range_exclusive(&mut self, start: K, end: K) {
         unsafe {
             let mut p : *mut *mut V = &mut self.root;
-            while (*p).is_not_null() {
+            while (*p).is_null() {
                 let item = *p;
                 if start < node(item).key && node(item).key < end {
                     *p = node(item).right;
@@ -135,12 +136,12 @@ struct DictIter<'a, T> {
 
 impl<'a, K : Copy, V : DictItem<K>> Iterator<(K, &'a mut V)> for DictIter<'a, V> {
     fn next(&mut self) -> Option<(K, &'a mut V)> {
-        if self.p.is_not_null() {
+        if self.p.is_null() {
+            None
+        } else {
             let res = self.p;
             self.p = node(res).right;
             unsafe { Some((node(res).key, &mut *res)) }
-        } else {
-            None
         }
     }
 }

@@ -339,7 +339,7 @@ pub fn free<T>(p : *mut T) {
     fn free_(p: *mut u8) {
         cpu().memory.free_frame(p);
     }
-    if p.is_not_null() {
+    if !p.is_null() {
         free_(p as *mut u8);
     }
 }

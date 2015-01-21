@@ -1,4 +1,5 @@
 use core::prelude::*;
+use core::ptr;
 
 use alloc;
 use free;
@@ -328,7 +329,7 @@ impl Process {
     pub fn remove_waiter(&mut self, other : &mut Process) {
         if other.waiting_for == (self as *mut Process) {
             self.waiters.remove(other);
-            other.waiting_for = RawPtr::null();
+            other.waiting_for = ptr::null_mut();
         }
     }
 

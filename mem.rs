@@ -1,6 +1,7 @@
 use core::prelude::*;
 use core::iter::range_step;
 use core::intrinsics::set_memory;
+use core::ptr;
 
 use con;
 use con::Console;
@@ -234,7 +235,7 @@ impl PerCpu {
     pub fn steal_frame(&mut self) -> *mut u8 {
         match get().alloc_frame() {
             Some(page) => page as *mut u8,
-            None => RawPtr::null()
+            None => ptr::null_mut()
         }
     }
 
