@@ -14,18 +14,18 @@ use util::abort;
 static log_add_pte : bool = false;
 
 pub mod mapflag {
-    pub static X : uint = 1;
-    pub static W : uint = 2;
-    pub static R : uint = 4;
-    pub static RWX : uint = 7;
+    pub const X : uint = 1;
+    pub const W : uint = 2;
+    pub const R : uint = 4;
+    pub const RWX : uint = 7;
     // Anonymous memory allocated to zeroes on first use.
-    pub static Anon : uint = 8;
+    pub const Anon : uint = 8;
     // handle is 0; offset is (paddr - vaddr)
-    pub static Phys : uint = 16;
+    pub const Phys : uint = 16;
     // Physical memory allocated and locked at map time; and deallocated when
     // unmapped.
-    pub static DMA : uint = Anon | Phys;
-    pub static UserAllowed : uint = DMA | RWX;
+    pub const DMA : uint = Anon | Phys;
+    pub const UserAllowed : uint = DMA | RWX;
 }
 
 // mapcard: the handle, offset and flags for the range of virtual addresses until

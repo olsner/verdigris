@@ -26,23 +26,23 @@ static log_pulse : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
-    pub static RECV : uint = 0;
-    pub static MAP : uint = 1;
-    pub static PFAULT : uint = 2;
-    pub static UNMAP : uint = 3;
-    pub static HMOD : uint = 4;
-    pub static NEWPROC : uint = 5;
-    pub static WRITE : uint = 6;
-    pub static PORTIO : uint = 7;
-    pub static GRANT : uint = 8;
-    pub static PULSE : uint = 9;
+    pub const RECV : uint = 0;
+    pub const MAP : uint = 1;
+    pub const PFAULT : uint = 2;
+    pub const UNMAP : uint = 3;
+    pub const HMOD : uint = 4;
+    pub const NEWPROC : uint = 5;
+    pub const WRITE : uint = 6;
+    pub const PORTIO : uint = 7;
+    pub const GRANT : uint = 8;
+    pub const PULSE : uint = 9;
 
-    pub static USER : uint = 16;
+    pub const USER : uint = 16;
 
-    pub static MSG_MASK : uint = 0xff;
-    pub static MSG_KIND_MASK : uint = 0x300;
-    pub static MSG_KIND_SEND : uint = 0x000;
-    pub static MSG_KIND_CALL : uint = 0x100;
+    pub const MSG_MASK : uint = 0xff;
+    pub const MSG_KIND_MASK : uint = 0x300;
+    pub const MSG_KIND_SEND : uint = 0x000;
+    pub const MSG_KIND_CALL : uint = 0x100;
 
     pub fn call(msg: uint) -> uint {
         msg | MSG_KIND_CALL

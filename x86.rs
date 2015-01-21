@@ -19,17 +19,17 @@ pub fn cr2() -> uint {
 
 pub mod seg {
     #![allow(dead_code)]
-    pub static code32 : uint = 8;
-    pub static data32 : uint = 16;
-    pub static code : uint = 24;
-    pub static data : uint = 32;
-    pub static tss64 : uint = 40;
-    pub static user_code32_base : uint = 56;
-    pub static user_data32_base : uint = 64;
-    pub static user_code64_base : uint = user_code32_base + 16;
-    pub static user_data64_base : uint = user_code64_base + 8;
-    pub static user_cs : uint = user_code64_base | 3;
-    pub static user_ds : uint = user_cs + 8;
+    pub const code32 : uint = 8;
+    pub const data32 : uint = 16;
+    pub const code : uint = 24;
+    pub const data : uint = 32;
+    pub const tss64 : uint = 40;
+    pub const user_code32_base : uint = 56;
+    pub const user_data32_base : uint = 64;
+    pub const user_code64_base : uint = user_code32_base + 16;
+    pub const user_data64_base : uint = user_code64_base + 8;
+    pub const user_cs : uint = user_code64_base | 3;
+    pub const user_ds : uint = user_cs + 8;
 }
 
 pub mod idt {
@@ -50,7 +50,7 @@ pub fn entry(handler_ptr : *const u8) -> Entry {
     (low as u64 | ((high as u64) << 32), handler as u64 >> 32)
 }
 
-pub static null_entry : Entry = (0,0);
+pub const null_entry : Entry = (0,0);
 
 pub type Entry = (u64,u64);
 pub type Table = [Entry; 49];

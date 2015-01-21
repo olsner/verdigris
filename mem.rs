@@ -29,7 +29,7 @@ pub mod framestack {
     pub type FreeFrameS = *mut FreeFrame;
     pub type FreeFrameP = Option<*mut FreeFrame>;
 
-    pub static none : FreeFrameS = 0 as *mut FreeFrame;
+    pub const none : FreeFrameS = 0 as *mut FreeFrame;
 
     fn from_option<T>(x : Option<T>, def : T) -> T {
         match x {
@@ -72,7 +72,7 @@ pub struct Global {
     num_total : uint,
 }
 
-pub static empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
+pub const empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
 pub static mut global : Global = empty_global;
 
 pub struct PerCpu {
