@@ -11,6 +11,8 @@ use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
 
+pub use self::FlagBit::*;
+
 pub enum FlagBit {
 // The process is currently queued on the run queue.
     Queued = 0,

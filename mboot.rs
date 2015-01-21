@@ -1,5 +1,9 @@
 use core::raw::Slice;
 use core::mem::transmute;
+use core::ops::Fn;
+
+pub use self::MemoryTypes::*;
+pub use self::InfoFlags::*;
 
 pub struct VBE {
     control_info: u32,

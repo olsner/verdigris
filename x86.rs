@@ -118,6 +118,8 @@ pub unsafe fn init() {
 } // mod idt
 
 pub mod msr {
+    pub use self::MSR::*;
+
     pub enum MSR {
         EFER = 0xc000_0080,
         STAR = 0xc000_0081,
