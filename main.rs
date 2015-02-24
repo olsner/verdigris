@@ -1,18 +1,21 @@
-#![allow(ctypes)]
-#![no_std]
-#![feature(globs)]
 #![feature(asm)]
-#![feature(lang_items)]
+#![feature(int_uint)]
 #![feature(intrinsics)]
-// Adding pub mod (another fix for this warning) increases footprint, so just
-// disble it instead.
-#![allow(visible_private_types)]
-#![allow(non_snake_case_functions)]
+#![feature(lang_items)]
+#![feature(no_std)]
+#![feature(core)]
+
+#![allow(improper_ctypes)]
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+
+#![no_std]
 
 extern crate core;
 
 use core::prelude::*;
-use core::mem::*;
+use core::mem::transmute;
+use core::mem::size_of;
 
 use aspace::AddressSpace;
 use con::write;
@@ -51,12 +54,11 @@ static log_idle : bool = false;
 static mem_test : bool = false;
 
 #[allow(dead_code)]
-fn writeMBInfo(infop : *const mboot::Info) {
+fn writeMBInfo(info : &mboot::Info) {
     con::write("Multiboot info at ");
-    con::writePtr(infop);
+    con::writePtr(info as *const mboot::Info);
     con::putc('\n');
 
-    let &info = unsafe { &*infop };
     con::write("Flags: ");
     con::writeHex(info.flags as uint);
     con::newline();
@@ -335,7 +337,7 @@ pub fn free<T>(p : *mut T) {
     fn free_(p: *mut u8) {
         cpu().memory.free_frame(p);
     }
-    if p.is_not_null() {
+    if !p.is_null() {
         free_(p as *mut u8);
     }
 }
@@ -418,7 +420,7 @@ fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
 }
 
 fn init_modules(cpu : &mut PerCpu) {
-    let &info = start32::MultiBootInfo();
+    let ref info = start32::MultiBootInfo();
     if !info.has(mboot::Modules) {
         return;
     }

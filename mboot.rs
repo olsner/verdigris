@@ -1,5 +1,9 @@
 use core::raw::Slice;
 use core::mem::transmute;
+use core::prelude::*;
+
+pub use self::MemoryTypes::*;
+pub use self::InfoFlags::*;
 
 pub struct VBE {
     control_info: u32,
@@ -17,7 +21,7 @@ pub struct FB {
     height      : u32,
     bpp         : u8,
     fbtype      : u8,
-    colors      : [u8, ..6],
+    colors      : [u8; 6],
 }
 
 #[allow(dead_code)]
@@ -77,7 +81,7 @@ pub struct Info {
     pub mods_addr   : u32,
 
 // 
-    syms        : [u32, ..4],
+    syms        : [u32; 4],
 
 // if has(MMap)
     pub mmap_length : u32,
@@ -100,7 +104,7 @@ impl Info {
         self.flags & (flag as u32) != 0
     }
 
-    pub fn modules(&self, make_ptr : |uint| -> *const Module) -> &[Module] {
+    pub fn modules(&self, make_ptr : fn(uint) -> *const Module) -> &[Module] {
         unsafe { transmute(Slice {
             data : make_ptr(self.mods_addr as uint),
             len : self.mods_count as uint
@@ -125,6 +129,7 @@ pub struct MemoryMapItem {
     // See values from MemoryTypes
     pub item_type   : u32,
 }
+impl Copy for MemoryMapItem {}
 
 pub enum MemoryTypes {
     MemoryTypeMemory = 1,

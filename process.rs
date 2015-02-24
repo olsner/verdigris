@@ -1,4 +1,5 @@
 use core::prelude::*;
+use core::ptr;
 
 use alloc;
 use free;
@@ -10,6 +11,8 @@ use dlist::DList;
 use dlist::DListNode;
 use dlist::DListItem;
 use dict::*;
+
+pub use self::FlagBit::*;
 
 pub enum FlagBit {
 // The process is currently queued on the run queue.
@@ -54,9 +57,9 @@ impl FlagBit {
 }
 // TODO Implement OR for FlagBit
 
-pub struct FXSaveRegs {
-    space : [u8, ..512]
-}
+//pub struct FXSaveRegs {
+//    space : [u8; 512]
+//}
 
 pub struct Handle {
     node : DictNode<uint, Handle>,
@@ -68,7 +71,8 @@ pub struct Handle {
     pulses : uint,
 }
 
-impl DictItem<uint> for Handle {
+impl DictItem for Handle {
+    type Key = uint;
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Handle> {
         &mut self.node
     }
@@ -128,7 +132,8 @@ pub struct PendingPulse {
     handle : *mut Handle,
 }
 
-impl DictItem<uint> for PendingPulse {
+impl DictItem for PendingPulse {
+    type Key = uint;
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, PendingPulse> {
         return &mut self.node;
     }
@@ -141,9 +146,6 @@ impl PendingPulse {
         res.handle = handle as *mut Handle;
         res as *mut PendingPulse
     }
-}
-
-impl FXSaveRegs {
 }
 
 pub struct Regs {
@@ -178,10 +180,10 @@ pub struct Process {
     pub rflags : uint,
     // Physical address of PML4 to put in CR3
     pub cr3 : uint,
+    // Fields up until cr3 are shared with assembly code.
 
     // Bitwise OR of flags values
     flags : Flags,
-    count : uint,
 
     // Pointer to the process we're waiting for (if any). See flags.
     waiting_for : *mut Process, // Option
@@ -194,8 +196,8 @@ pub struct Process {
 
     // TODO: move this into address space so handles can be shared between
     // threads.
-    handles : Dict<uint, Handle>,
-    pending : Dict<uint, PendingPulse>,
+    handles : Dict<Handle>,
+    pending : Dict<PendingPulse>,
 
     // When PROC_PFAULT is set, the virtual address that faulted.
     // Note that we lose a lot of data about the mapping that we looked up
@@ -205,7 +207,7 @@ pub struct Process {
     // The lower bits are access flags for the fault/request.
     pub fault_addr: uint,
 
-    fxsave : FXSaveRegs,
+    //fxsave : FXSaveRegs,
 }
 
 impl DListItem for Process {
@@ -326,7 +328,7 @@ impl Process {
     pub fn remove_waiter(&mut self, other : &mut Process) {
         if other.waiting_for == (self as *mut Process) {
             self.waiters.remove(other);
-            other.waiting_for = RawPtr::null();
+            other.waiting_for = ptr::null_mut();
         }
     }
 

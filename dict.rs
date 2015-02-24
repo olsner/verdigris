@@ -1,16 +1,22 @@
 use core::prelude::*;
+use core::ptr;
+use core::marker::PhantomData;
 
 use free;
 
-pub struct Dict<K, V> {
+pub struct Dict<V> {
     root : *mut V,
 }
+
+impl<V> Copy for Dict<V> {}
 
 pub struct DictNode<K, V> {
     pub key : K,
     left : *mut V,
     right : *mut V,
 }
+
+impl<K: Copy, V> Copy for DictNode<K, V> {}
 
 impl<K,V> DictNode<K,V> {
     pub fn new(key : K) -> DictNode<K, V> {
@@ -22,40 +28,42 @@ impl<K,V> DictNode<K,V> {
     }
 }
 
-pub trait DictItem<K> {
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<K, Self>;
+pub trait DictItem {
+    type Key = uint;
+
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<Self::Key, Self>;
     // Figure out a way to implement a node->item function, then we can remove
     // "T" from the nodes, do links between nodes instead of items, and use a
     // single copy of the linking code.
 }
 
-fn null<T>() -> *mut T { RawPtr::null() }
-fn node<'a, K, T : DictItem<K>>(p : *mut T) -> &'a mut DictNode<K, T> {
+fn null<T>() -> *mut T { ptr::null_mut() }
+fn node<'a, T : DictItem>(p : *mut T) -> &'a mut DictNode<T::Key, T> {
     unsafe { (*p).node() }
 }
 
-impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
+impl<V : DictItem> Dict<V> where V::Key: Ord + Copy {
     #[allow(dead_code)]
-    pub fn empty() -> Dict<K, V> {
+    pub fn empty() -> Dict<V> {
         Dict { root : null() }
     }
 
-    pub fn find<'a>(&mut self, key : K) -> Option<&'a mut V> {
+    pub fn find<'a>(&mut self, key : V::Key) -> Option<&'a mut V> {
         return self.find_(key);
     }
 
     // Return the greatest item with key <= key
     #[inline(never)]
-    fn find_<'a>(&self, key : K) -> Option<&'a mut V> {
+    fn find_<'a>(&self, key : V::Key) -> Option<&'a mut V> {
         let mut item = self.root;
         let mut max = null();
-        while item.is_not_null() {
-            let ikey : K = node(item).key;
+        while !item.is_null() {
+            let ikey : V::Key = node(item).key;
             if ikey <= key {
                 if max.is_null() {
                     max = item;
                 } else {
-                    let maxKey : K = node(max).key;
+                    let maxKey : V::Key = node(max).key;
                     if maxKey < ikey {
                         max = item;
                     }
@@ -67,7 +75,7 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
     }
 
     #[inline(always)]
-    pub fn find_const<'a>(&self, key : K) -> Option<&'a V> {
+    pub fn find_const<'a>(&self, key : V::Key) -> Option<&'a V> {
         match self.find_(key) {
             Some(x) => Some(&*x),
             None => None
@@ -82,10 +90,10 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
         unsafe { &mut *item }
     }
 
-    pub fn remove(&mut self, key: K) {
+    pub fn remove(&mut self, key: V::Key) {
         let mut p : *mut *mut V = &mut self.root;
         unsafe {
-            while (*p).is_not_null() {
+            while !(*p).is_null() {
                 let item = *p;
                 if node(item).key == key {
                     *p = node(item).right;
@@ -97,10 +105,10 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
         }
     }
 
-    pub fn remove_range_exclusive(&mut self, start: K, end: K) {
+    pub fn remove_range_exclusive(&mut self, start: V::Key, end: V::Key) {
         unsafe {
             let mut p : *mut *mut V = &mut self.root;
-            while (*p).is_not_null() {
+            while (*p).is_null() {
                 let item = *p;
                 if start < node(item).key && node(item).key < end {
                     *p = node(item).right;
@@ -125,22 +133,27 @@ impl<K : Ord + Copy, V : DictItem<K>> Dict<K, V> {
     }
 
     pub fn iter<'a>(&'a self) -> DictIter<'a, V> {
-        DictIter { p: self.root }
+        DictIter { p: self.root, phantomdata: PhantomData::<&'a V> }
     }
 }
 
-struct DictIter<'a, T> {
+// I would much rather allow unused item here, but it seems to be an *error*?
+// WTF...
+struct DictIter<'a, T : 'a> {
     p : *mut T,
+    phantomdata : PhantomData<&'a T>
 }
 
-impl<'a, K : Copy, V : DictItem<K>> Iterator<(K, &'a mut V)> for DictIter<'a, V> {
-    fn next(&mut self) -> Option<(K, &'a mut V)> {
-        if self.p.is_not_null() {
+impl<'a, V : DictItem> Iterator for DictIter<'a, V> where V::Key: Copy {
+    type Item = (V::Key, &'a mut V);
+
+    fn next(&mut self) -> Option<(V::Key, &'a mut V)> {
+        if self.p.is_null() {
+            None
+        } else {
             let res = self.p;
             self.p = node(res).right;
             unsafe { Some((node(res).key, &mut *res)) }
-        } else {
-            None
         }
     }
 }

@@ -1,9 +1,12 @@
-#[repr(packed)]
+use core::prelude::*;
+
+#[repr(C, packed)]
 #[allow(dead_code)]
 pub struct Gdtr {
     limit : u16,
-    base : uint,
+    base : u64,
 }
+impl Copy for Gdtr {}
 pub unsafe fn lgdt(gdtr : &Gdtr) {
     asm!("lgdt $0" :: "*m" (*gdtr));
 }
@@ -19,17 +22,17 @@ pub fn cr2() -> uint {
 
 pub mod seg {
     #![allow(dead_code)]
-    pub static code32 : uint = 8;
-    pub static data32 : uint = 16;
-    pub static code : uint = 24;
-    pub static data : uint = 32;
-    pub static tss64 : uint = 40;
-    pub static user_code32_base : uint = 56;
-    pub static user_data32_base : uint = 64;
-    pub static user_code64_base : uint = user_code32_base + 16;
-    pub static user_data64_base : uint = user_code64_base + 8;
-    pub static user_cs : uint = user_code64_base | 3;
-    pub static user_ds : uint = user_cs + 8;
+    pub const code32 : uint = 8;
+    pub const data32 : uint = 16;
+    pub const code : uint = 24;
+    pub const data : uint = 32;
+    pub const tss64 : uint = 40;
+    pub const user_code32_base : uint = 56;
+    pub const user_data32_base : uint = 64;
+    pub const user_code64_base : uint = user_code32_base + 16;
+    pub const user_data64_base : uint = user_code64_base + 8;
+    pub const user_cs : uint = user_code64_base | 3;
+    pub const user_ds : uint = user_cs + 8;
 }
 
 pub mod idt {
@@ -47,13 +50,13 @@ pub fn entry(handler_ptr : *const u8) -> Entry {
     let flags = GatePresent | GateTypeInterrupt;
     let high = (((handler >> 16) & 0xffff) << 16) | (flags << 8);
 
-    (low as u64 | (high as u64 << 32), handler as u64 >> 32)
+    (low as u64 | ((high as u64) << 32), handler as u64 >> 32)
 }
 
-pub static null_entry : Entry = (0,0);
+pub const null_entry : Entry = (0,0);
 
 pub type Entry = (u64,u64);
-pub type Table = [Entry, ..49];
+pub type Table = [Entry; 49];
 
 #[repr(packed)]
 #[allow(dead_code)]
@@ -61,15 +64,16 @@ pub struct Idtr {
     limit : u16,
     base : *const Table,
 }
+impl Copy for Idtr {}
 
 pub unsafe fn lidt(idtr : &Idtr) {
     asm!("lidt $0" :: "*m" (*idtr));
 }
-pub fn limit(_table : &[Entry, ..49]) -> u16 {
+pub fn limit(_table : &[Entry; 49]) -> u16 {
     return 49 * 16 - 1;
 }
 
-pub unsafe fn load(table: *const [Entry, ..49]) {
+pub unsafe fn load(table: *const [Entry; 49]) {
     let idtr = Idtr {
         limit : limit(&*table),
         base : table,
@@ -104,9 +108,9 @@ pub unsafe fn init() {
         fn handler_PF_stub();
         fn handler_NM_stub();
         // We can generate this, probably in less than 68 bytes?
-        static irq_handlers : [u32, ..17];
+        static irq_handlers : [u32; 17];
     }
-    static mut idt_table : [Entry, ..49] = [null_entry, ..49];
+    static mut idt_table : [Entry; 49] = [null_entry; 49];
     idt_table[7] = entry(handler_NM_stub as *const u8);
     idt_table[14] = entry(handler_PF_stub as *const u8);
     for i in range(32 as uint,49) {
@@ -118,6 +122,8 @@ pub unsafe fn init() {
 } // mod idt
 
 pub mod msr {
+    pub use self::MSR::*;
+
     pub enum MSR {
         EFER = 0xc000_0080,
         STAR = 0xc000_0081,

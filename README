@@ -1,8 +1,10 @@
-Last tested with rust nightly 2014-08-28.
+Last tested with rust nightly 2015-02-24.
 
 Build by running make. RUST_PREFIX can be set to the path of your rust install.
 The default value of RUST_PREFIX is "rust-nightly" - you can make that a
 symlink to wherever you have the appropriate nightly unpacked.
+With recent nightlies, the symlink should point to the rustc/ subdirectory. The
+nightly does *not* have to be installed, just unpacked.
 
 To run with user-space programs, check out https://github.com/olsner/os, copy
 out/kernel into os/out/grub/ (after building verdigris) and build the os/ repo.

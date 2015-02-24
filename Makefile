@@ -6,14 +6,15 @@ OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
 # RUST_PREFIX must be set pointing to the prefix where a nice nightly is
-# installed. This was tested with the 2014-08-28 build.
+# installed. This was tested with:
+#  rustc 1.0.0-nightly (2b01a37ec 2015-02-21) (built 2015-02-22).
 # Default: make a symlink rust-nightly in the project root, pointing to Rust.
 RUST_PREFIX ?= rust-nightly
 RUSTC := $(RUST_PREFIX)/bin/rustc
 export LD_LIBRARY_PATH=$(RUST_PREFIX)/lib
-CLANG ?= clang-3.5
+CLANG ?= clang-3.6
 CC = $(CLANG)
-LLVM = -3.5
+LLVM = -3.6
 LLVM_LINK = llvm-link$(LLVM)
 OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
@@ -31,10 +32,10 @@ COPTFLAGS += -mllvm -exhaustive-register-search
 LDFLAGS = --check-sections --gc-sections
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
 OPTFLAGS = -Oz -function-sections -data-sections
-OPTFLAGS += -disable-internalize -std-link-opts
+OPTFLAGS += -std-link-opts
 OPTFLAGS += -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
 OPTFLAGS += -argpromotion -mergefunc -deadargelim
-RUSTCFLAGS = -g -O --dep-info $(RUSTC_DEP_OUT) --target $(TARGET)
+RUSTCFLAGS = -g -O --target $(TARGET) --out-dir $(OUT)
 RUSTLIBS = -L.
 
 CP = @cp
@@ -77,7 +78,7 @@ $(OUT)/kernel: $(OUT)/kernel.elf
 -include $(OUT)/syscall.d
 
 $(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
-	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=bc $(RUSTLIBS) -o $@ $<
+	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=llvm-bc,dep-info $(RUSTLIBS) $<
 
 -include $(OUT)/main.d
 
@@ -85,7 +86,8 @@ $(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
 NO_SPLIT_STACKS = sed '/^attributes / s/ "split-stack"/ nounwind/'
 
 $(OUT)/amalgam.bc: $(OUT)/main.bc $(OUT)/rust-core/core.bc
-	$(HUSH_OPT) $(LLVM_LINK) -o - $^ | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
+	$(HUSH_OPT) set -o pipefail; $(LLVM_LINK) -o - $^ | $(LLVM_DIS) | $(NO_SPLIT_STACKS) | $(LLVM_AS) | $(OPT) -mtriple=$(TARGET) $(OPTFLAGS) > $@
+.DELETE_ON_ERROR: $(OUT)/amalgam.bc
 
 # I believe it should be possible to use llc for this step with the same result
 # as clang since we've already optimized, but it seems clang has additional
@@ -108,7 +110,7 @@ $(OUT)/%.o: %.asm
 	$(HUSH_ASM) $(YASM) -i . -f elf64 -g dwarf2 $< -o $@ -L nasm -l $(OUT)/$*.lst
 
 # Keep it around after building the .o file
-.PRECIOUS: $(OUT)/amalgam.s
+.SECONDARY: $(OUT)/amalgam.s
 
 %.ll: %.bc
 	$(HUSH_DIS) $(LLVM_DIS) $<
@@ -121,7 +123,7 @@ $(ZPIPE): zpipe.c
 RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
 $(OUT)/rust-core/core.bc: $(RUST_LIBDIR)/$(CORE_CRATE) $(ZPIPE)
 	@mkdir -p $(@D)
-	ar p $< $(CORE_CRATE:lib%.rlib=%).bytecode.deflate | tail -c +24 | $(ZPIPE) > $@.tmp
+	ar p $< $(CORE_CRATE:lib%.rlib=%).0.bytecode.deflate | tail -c +24 | $(ZPIPE) > $@.tmp
 	mv $@.tmp $@
 
 $(OUT)/rust-core/$(CORE_CRATE): $(RUST_LIBDIR)/$(CORE_CRATE)

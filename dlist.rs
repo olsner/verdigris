@@ -1,4 +1,6 @@
 use core::prelude::*;
+use core::ptr;
+use core::marker::PhantomData;
 
 use util::abort;
 
@@ -13,6 +15,9 @@ pub struct DListNode<T> {
 }
 
 impl<T> DListNode<T> {
+    // Just silence the warning. Currently all users rely on init-to-0 to
+    // initialize their DListNodes
+    #[allow(dead_code)]
     pub fn new() -> DListNode<T> {
         DListNode { prev : null(), next : null() }
     }
@@ -25,8 +30,8 @@ pub trait DListItem {
     // single copy of the linking code.
 }
 
-pub fn not_null<U, T : RawPtr<U>>(p : T) -> bool { p.is_not_null() }
-fn null<T>() -> *mut T { RawPtr::null() }
+pub fn not_null<T : PtrExt>(p : T) -> bool { !p.is_null() }
+fn null<T>() -> *mut T { ptr::null_mut() }
 fn node<'a, T : DListItem>(p : *mut T) -> &'a mut DListNode<T> {
     unsafe { (*p).node() }
 }
@@ -41,7 +46,7 @@ impl<T : DListItem> DList<T> {
         if !(node(item).prev.is_null() && node(item).next.is_null()) {
             abort("appending item already in list");
         }
-        if self.tail.is_not_null() {
+        if !self.tail.is_null() {
             let tail = self.tail;
             self.tail = item;
             node(tail).next = item;
@@ -85,23 +90,28 @@ impl<T : DListItem> DList<T> {
         return item;
     }
 
-    pub fn iter<'a>(&'a self) -> DListIter<'a, T> {
-        DListIter { p: self.head }
+    // FIXME Hack: returns an iterator unconnected to the collection's lifetime,
+    // so that it's possible to remove entries while iterating.
+    pub fn iter<'a>(&self) -> DListIter<'a, T> {
+        DListIter { p: self.head, phantomdata: PhantomData::<&'a T> }
     }
 }
 
-struct DListIter<'a, T> {
+struct DListIter<'a, T : 'a> {
     p : *mut T,
+    phantomdata : PhantomData<&'a T>
 }
 
-impl<'a, T : DListItem> Iterator<&'a mut T> for DListIter<'a, T> {
+impl<'a, T : DListItem> Iterator for DListIter<'a, T> {
+    type Item = &'a mut T;
+
     fn next(&mut self) -> Option<&'a mut T> {
-        if self.p.is_not_null() {
+        if self.p.is_null() {
+            None
+        } else {
             let res = self.p;
             self.p = node(res).next;
             unsafe { Some(&mut *res) }
-        } else {
-            None
         }
     }
 }

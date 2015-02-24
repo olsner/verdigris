@@ -1,6 +1,7 @@
 use core::prelude::*;
 use core::iter::range_step;
 use core::intrinsics::set_memory;
+use core::ptr;
 
 use con;
 use con::Console;
@@ -29,7 +30,7 @@ pub mod framestack {
     pub type FreeFrameS = *mut FreeFrame;
     pub type FreeFrameP = Option<*mut FreeFrame>;
 
-    pub static none : FreeFrameS = 0 as *mut FreeFrame;
+    pub const none : FreeFrameS = 0 as *mut FreeFrame;
 
     fn from_option<T>(x : Option<T>, def : T) -> T {
         match x {
@@ -72,7 +73,7 @@ pub struct Global {
     num_total : uint,
 }
 
-pub static empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
+pub const empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
 pub static mut global : Global = empty_global;
 
 pub struct PerCpu {
@@ -90,7 +91,9 @@ impl MemoryMap {
     }
 }
 
-impl Iterator<MemoryMapItem> for MemoryMap {
+impl Iterator for MemoryMap {
+    type Item = MemoryMapItem;
+
     fn next(&mut self) -> Option<MemoryMapItem> {
         if self.addr < self.end { unsafe {
             let item = *(self.addr as *const MemoryMapItem);
@@ -112,7 +115,7 @@ impl Global {
             return;
         }
 
-        let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
+        let mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
         let mut count = 0;
         for item in mmap {
             if log_memory_map {
@@ -234,7 +237,7 @@ impl PerCpu {
     pub fn steal_frame(&mut self) -> *mut u8 {
         match get().alloc_frame() {
             Some(page) => page as *mut u8,
-            None => RawPtr::null()
+            None => ptr::null_mut()
         }
     }
 
@@ -305,11 +308,11 @@ extern "rust-intrinsic" {
     fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T, count: uint);
 }
 
-pub fn heap_copy<T>(x : T) -> *mut T {
+pub fn heap_copy<T>(x : &T) -> *mut T {
     use alloc;
     unsafe {
         let res : *mut T = alloc();
-        copy_nonoverlapping_memory(res, &x, 1);
+        copy_nonoverlapping_memory(res, x, 1);
         return res;
     }
 }
