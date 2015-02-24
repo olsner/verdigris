@@ -55,12 +55,11 @@ static log_idle : bool = false;
 static mem_test : bool = false;
 
 #[allow(dead_code)]
-fn writeMBInfo(infop : *const mboot::Info) {
+fn writeMBInfo(info : &mboot::Info) {
     con::write("Multiboot info at ");
-    con::writePtr(infop);
+    con::writePtr(info as *const mboot::Info);
     con::putc('\n');
 
-    let &info = unsafe { &*infop };
     con::write("Flags: ");
     con::writeHex(info.flags as uint);
     con::newline();
@@ -422,7 +421,7 @@ fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
 }
 
 fn init_modules(cpu : &mut PerCpu) {
-    let &info = start32::MultiBootInfo();
+    let ref info = start32::MultiBootInfo();
     if !info.has(mboot::Modules) {
         return;
     }

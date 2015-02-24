@@ -1,9 +1,12 @@
+use core::prelude::*;
+
 #[repr(packed)]
 #[allow(dead_code)]
 pub struct Gdtr {
     limit : u16,
     base : uint,
 }
+impl Copy for Gdtr {}
 pub unsafe fn lgdt(gdtr : &Gdtr) {
     asm!("lgdt $0" :: "*m" (*gdtr));
 }
@@ -61,6 +64,7 @@ pub struct Idtr {
     limit : u16,
     base : *const Table,
 }
+impl Copy for Idtr {}
 
 pub unsafe fn lidt(idtr : &Idtr) {
     asm!("lidt $0" :: "*m" (*idtr));

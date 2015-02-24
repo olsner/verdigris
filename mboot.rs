@@ -1,6 +1,6 @@
 use core::raw::Slice;
 use core::mem::transmute;
-use core::ops::Fn;
+use core::prelude::*;
 
 pub use self::MemoryTypes::*;
 pub use self::InfoFlags::*;
@@ -104,7 +104,7 @@ impl Info {
         self.flags & (flag as u32) != 0
     }
 
-    pub fn modules(&self, make_ptr : Fn(uint) -> *const Module) -> &[Module] {
+    pub fn modules(&self, make_ptr : fn(uint) -> *const Module) -> &[Module] {
         unsafe { transmute(Slice {
             data : make_ptr(self.mods_addr as uint),
             len : self.mods_count as uint
@@ -129,6 +129,7 @@ pub struct MemoryMapItem {
     // See values from MemoryTypes
     pub item_type   : u32,
 }
+impl Copy for MemoryMapItem {}
 
 pub enum MemoryTypes {
     MemoryTypeMemory = 1,

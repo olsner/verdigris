@@ -91,7 +91,9 @@ impl MemoryMap {
     }
 }
 
-impl Iterator<MemoryMapItem> for MemoryMap {
+impl Iterator for MemoryMap {
+    type Item = MemoryMapItem;
+
     fn next(&mut self) -> Option<MemoryMapItem> {
         if self.addr < self.end { unsafe {
             let item = *(self.addr as *const MemoryMapItem);
