@@ -6,7 +6,8 @@ OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
 # RUST_PREFIX must be set pointing to the prefix where a nice nightly is
-# installed. This was tested with the 2014-08-28 build.
+# installed. This was tested with:
+#  rustc 1.0.0-nightly (2b01a37ec 2015-02-21) (built 2015-02-22).
 # Default: make a symlink rust-nightly in the project root, pointing to Rust.
 RUST_PREFIX ?= rust-nightly
 RUSTC := $(RUST_PREFIX)/bin/rustc
