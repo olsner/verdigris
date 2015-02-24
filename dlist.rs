@@ -15,6 +15,9 @@ pub struct DListNode<T> {
 }
 
 impl<T> DListNode<T> {
+    // Just silence the warning. Currently all users rely on init-to-0 to
+    // initialize their DListNodes
+    #[allow(dead_code)]
     pub fn new() -> DListNode<T> {
         DListNode { prev : null(), next : null() }
     }

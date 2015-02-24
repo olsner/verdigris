@@ -115,7 +115,7 @@ impl Global {
             return;
         }
 
-        let mut mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
+        let mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
         let mut count = 0;
         for item in mmap {
             if log_memory_map {

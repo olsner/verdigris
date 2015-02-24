@@ -57,9 +57,9 @@ impl FlagBit {
 }
 // TODO Implement OR for FlagBit
 
-pub struct FXSaveRegs {
-    space : [u8; 512]
-}
+//pub struct FXSaveRegs {
+//    space : [u8; 512]
+//}
 
 pub struct Handle {
     node : DictNode<uint, Handle>,
@@ -148,9 +148,6 @@ impl PendingPulse {
     }
 }
 
-impl FXSaveRegs {
-}
-
 pub struct Regs {
     pub rax : uint,
     pub rcx : uint,
@@ -183,10 +180,10 @@ pub struct Process {
     pub rflags : uint,
     // Physical address of PML4 to put in CR3
     pub cr3 : uint,
+    // Fields up until cr3 are shared with assembly code.
 
     // Bitwise OR of flags values
     flags : Flags,
-    count : uint,
 
     // Pointer to the process we're waiting for (if any). See flags.
     waiting_for : *mut Process, // Option
@@ -210,7 +207,7 @@ pub struct Process {
     // The lower bits are access flags for the fault/request.
     pub fault_addr: uint,
 
-    fxsave : FXSaveRegs,
+    //fxsave : FXSaveRegs,
 }
 
 impl DListItem for Process {

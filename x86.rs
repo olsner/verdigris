@@ -1,10 +1,10 @@
 use core::prelude::*;
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[allow(dead_code)]
 pub struct Gdtr {
     limit : u16,
-    base : uint,
+    base : u64,
 }
 impl Copy for Gdtr {}
 pub unsafe fn lgdt(gdtr : &Gdtr) {

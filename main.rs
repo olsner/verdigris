@@ -3,12 +3,11 @@
 #![feature(intrinsics)]
 #![feature(lang_items)]
 #![feature(no_std)]
+#![feature(core)]
 
-#![allow(ctypes)]
-// Adding pub mod (another fix for this warning) increases footprint, so just
-// disble it instead.
-#![allow(visible_private_types)]
-#![allow(non_snake_case_functions)]
+#![allow(improper_ctypes)]
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
 
 #![no_std]
 
