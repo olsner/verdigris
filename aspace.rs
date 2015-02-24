@@ -49,10 +49,15 @@ pub struct MapCard {
     pub offset : uint,
 }
 
-impl DictItem<uint> for MapCard {
+impl DictItem for MapCard {
+    type Key = uint;
+
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, MapCard> {
         return &mut self.as_node;
     }
+}
+
+impl Copy for MapCard {
 }
 
 impl MapCard {
@@ -117,7 +122,9 @@ pub struct Backing {
     child_node : DListNode<Backing>
 }
 
-impl DictItem<uint> for Backing {
+impl DictItem for Backing {
+    type Key = uint;
+
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Backing> {
         return &mut self.as_node;
     }
@@ -212,7 +219,9 @@ pub struct Sharing {
     children : DList<Backing>,
 }
 
-impl DictItem<uint> for Sharing {
+impl DictItem for Sharing {
+    type Key = uint;
+
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Sharing> {
         return &mut self.as_node;
     }
@@ -245,9 +254,9 @@ pub struct AddressSpace {
 //  .handles    restruc dict
 //  .pending    restruc dict
 
-    mapcards : Dict<uint, MapCard>,
-    backings : Dict<uint, Backing>,
-    sharings : Dict<uint, Sharing>
+    mapcards : Dict<MapCard>,
+    backings : Dict<Backing>,
+    sharings : Dict<Sharing>
 }
 
 fn alloc_pml4() -> *mut PML4 {
@@ -307,7 +316,7 @@ impl AddressSpace {
     }
 
     fn mapcard_add(&mut self, card : &MapCard) {
-        self.mapcards.insert(heap_copy(*card));
+        self.mapcards.insert(heap_copy(card));
     }
 
     pub fn mapcard_set(&mut self, vaddr : uint, handle : uint, offset : uint, access : uint) {
@@ -349,13 +358,13 @@ impl AddressSpace {
         self.backings.insert(b)
     }
 
-    fn add_phys_backing<'a>(&mut self, card : MapCard, vaddr : uint)
+    fn add_phys_backing<'a>(&mut self, card : &MapCard, vaddr : uint)
     -> &'a Backing {
         let b = Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr));
         &*self.backings.insert(b)
     }
 
-    fn add_anon_backing<'a>(&mut self, card : MapCard, vaddr : uint)
+    fn add_anon_backing<'a>(&mut self, card : &MapCard, vaddr : uint)
     -> &'a Backing {
         let b = Backing::new_anon(vaddr | card.flags());
         &*self.backings.insert(b)
@@ -377,9 +386,9 @@ impl AddressSpace {
                 }
                 if card.handle == 0 {
                     if (card.flags() & DMA) == Anon {
-                        return self.add_anon_backing(*card, vaddr);
+                        return self.add_anon_backing(card, vaddr);
                     } else if (card.flags() & Phys) != 0 {
-                        return self.add_phys_backing(*card, vaddr);
+                        return self.add_phys_backing(card, vaddr);
                     } else {
                         abort("not anon or phys for handle==0");
                     }

@@ -1,5 +1,6 @@
 use core::prelude::*;
 use core::ptr;
+use core::marker::PhantomData;
 
 use util::abort;
 
@@ -86,16 +87,21 @@ impl<T : DListItem> DList<T> {
         return item;
     }
 
-    pub fn iter<'a>(&'a self) -> DListIter<'a, T> {
-        DListIter { p: self.head }
+    // FIXME Hack: returns an iterator unconnected to the collection's lifetime,
+    // so that it's possible to remove entries while iterating.
+    pub fn iter<'a>(&self) -> DListIter<'a, T> {
+        DListIter { p: self.head, phantomdata: PhantomData::<&'a T> }
     }
 }
 
-struct DListIter<'a, T> {
+struct DListIter<'a, T : 'a> {
     p : *mut T,
+    phantomdata : PhantomData<&'a T>
 }
 
-impl<'a, T : DListItem> Iterator<&'a mut T> for DListIter<'a, T> {
+impl<'a, T : DListItem> Iterator for DListIter<'a, T> {
+    type Item = &'a mut T;
+
     fn next(&mut self) -> Option<&'a mut T> {
         if self.p.is_null() {
             None

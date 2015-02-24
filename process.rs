@@ -71,7 +71,8 @@ pub struct Handle {
     pulses : uint,
 }
 
-impl DictItem<uint> for Handle {
+impl DictItem for Handle {
+    type Key = uint;
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Handle> {
         &mut self.node
     }
@@ -131,7 +132,8 @@ pub struct PendingPulse {
     handle : *mut Handle,
 }
 
-impl DictItem<uint> for PendingPulse {
+impl DictItem for PendingPulse {
+    type Key = uint;
     fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, PendingPulse> {
         return &mut self.node;
     }
@@ -197,8 +199,8 @@ pub struct Process {
 
     // TODO: move this into address space so handles can be shared between
     // threads.
-    handles : Dict<uint, Handle>,
-    pending : Dict<uint, PendingPulse>,
+    handles : Dict<Handle>,
+    pending : Dict<PendingPulse>,
 
     // When PROC_PFAULT is set, the virtual address that faulted.
     // Note that we lose a lot of data about the mapping that we looked up
