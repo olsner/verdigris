@@ -1,6 +1,6 @@
 use core::prelude::*;
 use core::iter::range_step;
-use core::intrinsics::set_memory;
+use core::intrinsics::write_bytes;
 use core::ptr;
 
 use con;
@@ -106,7 +106,7 @@ impl Iterator for MemoryMap {
 }
 
 fn clear<T>(page : *mut T) {
-    unsafe { set_memory(page as *mut u8, 0, 4096); }
+    unsafe { write_bytes(page as *mut u8, 0, 4096); }
 }
 
 impl Global {
