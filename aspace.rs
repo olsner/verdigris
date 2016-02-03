@@ -10,22 +10,25 @@ use dlist::*;
 use mem::heap_copy;
 use start32;
 use util::abort;
+pub use self::mapflag::MapFlag;
 
 static log_add_pte : bool = false;
 
 pub mod mapflag {
-    pub const X : uint = 1;
-    pub const W : uint = 2;
-    pub const R : uint = 4;
-    pub const RWX : uint = 7;
+    pub type MapFlag = u8;
+
+    pub const X : MapFlag = 1;
+    pub const W : MapFlag = 2;
+    pub const R : MapFlag = 4;
+    pub const RWX : MapFlag = 7;
     // Anonymous memory allocated to zeroes on first use.
-    pub const Anon : uint = 8;
+    pub const Anon : MapFlag = 8;
     // handle is 0; offset is (paddr - vaddr)
-    pub const Phys : uint = 16;
+    pub const Phys : MapFlag = 16;
     // Physical memory allocated and locked at map time; and deallocated when
     // unmapped.
-    pub const DMA : uint = Anon | Phys;
-    pub const UserAllowed : uint = DMA | RWX;
+    pub const DMA : MapFlag = Anon | Phys;
+    pub const UserAllowed : MapFlag = DMA | RWX;
 }
 
 // mapcard: the handle, offset and flags for the range of virtual addresses until
@@ -38,49 +41,48 @@ pub mod mapflag {
 // This structure is completely unrelated to the physical pages backing virtual
 // memory - it represents each process' wishful thinking about how their memory
 // should look. backings and sharings control physical memory.
+#[derive(Clone, Copy)]
 pub struct MapCard {
-    as_node : DictNode<uint, MapCard>,
-    pub handle : uint,
+    as_node : DictNode<u64, MapCard>,
+    pub handle : u64,
     // .vaddr + .offset = handle-offset to be sent to backer on fault
     // For a direct physical mapping, paddr = .vaddr + .offset
     // .offset = handle-offset - vaddr
     // .offset = paddr - .vaddr
     // The low 12 bits contain flags.
-    pub offset : uint,
+    pub offset : u64,
 }
 
 impl DictItem for MapCard {
-    type Key = uint;
+    type Key = u64;
 
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, MapCard> {
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<u64, MapCard> {
         return &mut self.as_node;
     }
 }
 
-impl Copy for MapCard {
-}
-
 impl MapCard {
-    fn new(vaddr : uint, handle : uint, offset : uint) -> MapCard {
-        MapCard { as_node: DictNode::new(vaddr), handle: handle, offset: offset }
+    fn new(vaddr : u64, handle : u64, offset : u64, access : MapFlag) -> MapCard {
+        MapCard { as_node: DictNode::new(vaddr), handle: handle,
+            offset: offset | (access as u64) }
     }
 
-    /*fn init(&mut self, vaddr: uint, handle: uint, offset: uint) {
+    /*fn init(&mut self, vaddr: u64, handle: u64, offset: u64) {
         self.as_node.init(vaddr);
         self.handle = handle;
         self.offset = offset;
     }*/
 
-    pub fn vaddr(&self) -> uint {
+    pub fn vaddr(&self) -> u64 {
         return self.as_node.key;
     }
 
-    pub fn paddr(&self, vaddr : uint) -> uint {
+    pub fn paddr(&self, vaddr : u64) -> u64 {
         return vaddr + (self.offset & !0xfff);
     }
 
-    pub fn flags(&self) -> uint {
-        return self.offset & 0xfff;
+    pub fn flags(&self) -> MapFlag {
+        (self.offset & 0xfff) as MapFlag
     }
 
     fn same_addr(&self, other : &MapCard) -> bool {
@@ -113,19 +115,19 @@ impl MapCard {
 // very small process could have only one level, and map 128 pages at 0..512kB.
 pub struct Backing {
     // Flags stored in low bits of vaddr/key!
-    as_node : DictNode<uint, Backing>,
+    as_node : DictNode<u64, Backing>,
     // Pointer to parent sharing. Needed to unlink self when unmapping.
     // Could have room for flags (e.g. to let it be a paddr when we don't
     // need the parent - we might have a direct physical address mapping)
-    parent_paddr : uint,
+    parent_paddr : u64,
     // Space to participate in parent's list of remappings.
     child_node : DListNode<Backing>
 }
 
 impl DictItem for Backing {
-    type Key = uint;
+    type Key = u64;
 
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Backing> {
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<u64, Backing> {
         return &mut self.as_node;
     }
 }
@@ -136,47 +138,47 @@ impl DListItem for Backing {
     }
 }
 
-fn alloc_frame_paddr() -> uint {
+fn alloc_frame_paddr() -> u64 {
     let p : *mut u8 = cpu().memory.alloc_frame_panic();
-    p as uint - start32::kernel_base
+    p as u64 - start32::kernel_base
 }
 
 impl Backing {
-    fn new(vaddrFlags : uint, parent_paddr: uint) -> *mut Backing {
+    fn new(vaddr: u64, flags: MapFlag, parent_paddr: u64) -> *mut Backing {
         let res = alloc::<Backing>();
-        res.as_node.init(vaddrFlags);
+        res.as_node.init(vaddr | (flags as u64));
         res.parent_paddr = parent_paddr;
         res as *mut Backing
     }
 
-    fn new_phys(vaddrFlags : uint, phys_addr : uint) -> *mut Backing {
+    fn new_phys(vaddr : u64, flags : MapFlag, phys_addr : u64) -> *mut Backing {
         if phys_addr & 0xfff != 0 {
             abort("Bad physical address in new_phys");
         }
-        Backing::new(vaddrFlags, phys_addr)
+        Backing::new(vaddr, flags, phys_addr)
     }
 
-    fn new_anon(vaddrFlags : uint) -> *mut Backing {
-        Backing::new(vaddrFlags | mapflag::Phys, alloc_frame_paddr())
+    fn new_anon(vaddr : u64, flags : MapFlag) -> *mut Backing {
+        Backing::new(vaddr, flags | mapflag::Phys, alloc_frame_paddr())
     }
 
-    fn new_share(vaddrFlags: uint, share: &mut Sharing) -> *mut Backing {
-        Backing::new(vaddrFlags, (share as *mut Sharing) as uint)
+    fn new_share(vaddr: u64, flags : MapFlag, share: &mut Sharing) -> *mut Backing {
+        Backing::new(vaddr, flags, (share as *mut Sharing) as u64)
     }
 
-    pub fn has_vaddr(&self, vaddr : uint) -> bool {
+    pub fn has_vaddr(&self, vaddr : u64) -> bool {
         return self.vaddr() == vaddr & !0xfff;
     }
 
-    pub fn vaddr(&self) -> uint {
+    pub fn vaddr(&self) -> u64 {
         return self.as_node.key & !0xfff;
     }
 
-    pub fn flags(&self) -> uint {
-        return self.as_node.key & 0xfff;
+    pub fn flags(&self) -> MapFlag {
+        (self.as_node.key & 0xfff) as MapFlag
     }
 
-    fn pte_flags(&self) -> uint {
+    fn pte_flags(&self) -> u64 {
         let flags = self.flags();
         let mut pte = 5; // Present, User-accessible
         if (flags & mapflag::X) == 0 {
@@ -189,11 +191,11 @@ impl Backing {
         return pte;
     }
 
-    pub fn pte(&self) -> uint {
+    pub fn pte(&self) -> u64 {
         self.paddr() | self.pte_flags()
     }
 
-    pub fn paddr(&self) -> uint {
+    pub fn paddr(&self) -> u64 {
         if (self.flags() & mapflag::Phys) != 0 {
             self.parent_paddr
         } else {
@@ -213,16 +215,16 @@ impl Backing {
 // sharing: mapping one page to every place it's been shared to
 // 7 words!
 pub struct Sharing {
-    as_node : DictNode<uint, Sharing>,
-    paddr : uint,
+    as_node : DictNode<u64, Sharing>,
+    paddr : u64,
     aspace : *mut AddressSpace,
     children : DList<Backing>,
 }
 
 impl DictItem for Sharing {
-    type Key = uint;
+    type Key = u64;
 
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Sharing> {
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<u64, Sharing> {
         return &mut self.as_node;
     }
 }
@@ -247,7 +249,7 @@ pub struct AddressSpace {
     // (This is the virtual address in the higher half. proc.cr3 is a
     // physical address.)
     pml4 : *mut PML4,
-    count : uint,
+    count : u64,
     // Do we need a list of processes that share an address space?
     // (That would remove the need for .count, I think.)
     //.procs    resq 1
@@ -269,13 +271,13 @@ fn alloc_pml4() -> *mut PML4 {
     return res;
 }
 
-fn get_alloc_pt(table : *mut PML4, mut index : uint, flags : uint) -> *mut PageTable {
-    index &= 0x1ff;
+fn get_alloc_pt(table : *mut PML4, index_ : u64, flags : u64) -> *mut PageTable {
+    let index = (index_ & 0x1ff) as usize;
     unsafe {
         let existing = (*table)[index];
         if (existing & 1) == 0 {
             let new : *mut PML4 = cpu().memory.alloc_frame_panic();
-            (*table)[index] = ((new as uint - start32::kernel_base) | flags) as u64;
+            (*table)[index] = ((new as u64 - start32::kernel_base) | flags) as u64;
             return new;
         } else {
             return ((existing & !0xfff) + start32::kernel_base as u64) as *mut PageTable;
@@ -283,8 +285,8 @@ fn get_alloc_pt(table : *mut PML4, mut index : uint, flags : uint) -> *mut PageT
     }
 }
 
-fn paddr_for_vpaddr<T>(vpaddr: *mut T) -> uint {
-    return vpaddr as uint - start32::kernel_base;
+fn paddr_for_vpaddr<T>(vpaddr: *mut T) -> u64 {
+    return vpaddr as u64 - start32::kernel_base;
 }
 
 impl AddressSpace {
@@ -299,19 +301,19 @@ impl AddressSpace {
         res as *mut AddressSpace
     }
 
-    pub fn cr3(&self) -> uint {
+    pub fn cr3(&self) -> u64 {
         return paddr_for_vpaddr(self.pml4);
     }
 
     // FIXME This should return by-value and have a default value instead.
-    pub fn mapcard_find<'a>(&mut self, vaddr : uint) -> Option<&'a mut MapCard> {
+    pub fn mapcard_find<'a>(&mut self, vaddr : u64) -> Option<&'a mut MapCard> {
         return self.mapcards.find(vaddr);
     }
 
-    pub fn mapcard_find_def(&self, vaddr: uint) -> MapCard {
+    pub fn mapcard_find_def(&self, vaddr: u64) -> MapCard {
         match self.mapcards.find_const(vaddr) {
             Some(card) => *card,
-            None => MapCard::new(vaddr, 0, 0),
+            None => MapCard::new(vaddr, 0, 0, 0),
         }
     }
 
@@ -319,9 +321,9 @@ impl AddressSpace {
         self.mapcards.insert(heap_copy(card));
     }
 
-    pub fn mapcard_set(&mut self, vaddr : uint, handle : uint, offset : uint, access : uint) {
+    pub fn mapcard_set(&mut self, vaddr : u64, handle : u64, offset : u64, access : MapFlag) {
         // TODO Assert that vaddr & 0xfff == offset & 0xfff == 0
-        self.mapcard_set_(&MapCard::new(vaddr, handle, offset | access));
+        self.mapcard_set_(&MapCard::new(vaddr, handle, offset, access));
     }
 
     fn mapcard_set_(&mut self, new : &MapCard) {
@@ -337,10 +339,10 @@ impl AddressSpace {
         self.mapcard_add(new);
     }
 
-    pub fn map_range(&mut self, start: uint, end: uint, handle: uint, offset: uint) {
+    pub fn map_range(&mut self, start: u64, end: u64, handle: u64, offset: u64) {
         let end_card = self.mapcard_find_def(end);
-        let new_end_card = MapCard::new(end, end_card.handle, end_card.offset);
-        let start_card = MapCard::new(start, handle, offset);
+        let new_end_card = MapCard::new(end, end_card.handle, end_card.offset, 0);
+        let start_card = MapCard::new(start, handle, offset, 0);
         if start_card.same(&end_card) {
             self.mapcards.remove(end_card.vaddr());
         } else {
@@ -351,26 +353,26 @@ impl AddressSpace {
         self.mapcard_set_(&start_card);
     }
 
-    pub fn add_shared_backing<'a>(&mut self, vaddr: uint, prot: uint,
+    pub fn add_shared_backing<'a>(&mut self, vaddr: u64, prot: MapFlag,
             share: &mut Sharing) -> &'a mut Backing {
-        let b = Backing::new_share(vaddr | prot, share);
+        let b = Backing::new_share(vaddr, prot, share);
         share.children.append(b);
         self.backings.insert(b)
     }
 
-    fn add_phys_backing<'a>(&mut self, card : &MapCard, vaddr : uint)
+    fn add_phys_backing<'a>(&mut self, card : &MapCard, vaddr : u64)
     -> &'a Backing {
-        let b = Backing::new_phys(vaddr | card.flags(), card.paddr(vaddr));
+        let b = Backing::new_phys(vaddr, card.flags(), card.paddr(vaddr));
         &*self.backings.insert(b)
     }
 
-    fn add_anon_backing<'a>(&mut self, card : &MapCard, vaddr : uint)
+    fn add_anon_backing<'a>(&mut self, card : &MapCard, vaddr : u64)
     -> &'a Backing {
-        let b = Backing::new_anon(vaddr | card.flags());
+        let b = Backing::new_anon(vaddr, card.flags());
         &*self.backings.insert(b)
     }
 
-    pub fn find_add_backing<'a>(&mut self, vaddr : uint) -> &'a Backing {
+    pub fn find_add_backing<'a>(&mut self, vaddr : u64) -> &'a Backing {
         use aspace::mapflag::*;
         use util::abort;
 
@@ -402,12 +404,12 @@ impl AddressSpace {
         }
     }
 
-    pub fn share_backing<'a>(&mut self, vaddr: uint) -> &'a mut Sharing {
+    pub fn share_backing<'a>(&mut self, vaddr: u64) -> &'a mut Sharing {
         let back = self.find_add_backing(vaddr);
         self.sharings.insert(Sharing::new(self, back))
     }
 
-    pub fn add_pte(&mut self, vaddr : uint, pte : uint) {
+    pub fn add_pte(&mut self, vaddr : u64, pte : u64) {
         if log_add_pte {
             write("Mapping ");
             con::writePHex(vaddr);
@@ -418,6 +420,6 @@ impl AddressSpace {
         let pdp = get_alloc_pt(self.pml4, vaddr >> 39, 7);
         let pd = get_alloc_pt(pdp, vaddr >> 30, 7);
         let pt = get_alloc_pt(pd, vaddr >> 21, 7);
-        unsafe { (*pt)[(vaddr >> 12) & 0x1ff] = pte as u64; }
+        unsafe { (*pt)[(vaddr as usize >> 12) & 0x1ff] = pte as u64; }
     }
 }

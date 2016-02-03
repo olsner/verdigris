@@ -51,8 +51,8 @@ pub enum FlagBit {
 
 impl FlagBit {
     #[inline]
-    pub fn mask(self) -> uint {
-        return 1 << (self as uint);
+    pub fn mask(self) -> Flags {
+        return 1 << (self as Flags);
     }
 }
 // TODO Implement OR for FlagBit
@@ -62,35 +62,35 @@ impl FlagBit {
 //}
 
 pub struct Handle {
-    node : DictNode<uint, Handle>,
+    node : DictNode<u64, Handle>,
     process : *mut Process,
     // pointer to other handle if any. Its 'key' field is the other-name that
     // we need when e.g. sending it a message. If null this is not associated
     // in other-proc yet.
     pub other : Option<*mut Handle>,
-    pulses : uint,
+    pulses : u64,
 }
 
 impl DictItem for Handle {
-    type Key = uint;
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, Handle> {
+    type Key = u64;
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<u64, Handle> {
         &mut self.node
     }
 }
 
 impl Handle {
-    fn init(&mut self, id : uint, process : *mut Process) {
+    fn init(&mut self, id : u64, process : *mut Process) {
         self.node.init(id);
         self.process = process;
     }
 
-    pub fn new(id : uint, process : *mut Process) -> *mut Handle {
+    pub fn new(id : u64, process : *mut Process) -> *mut Handle {
         let res = alloc::<Handle>();
         res.init(id, process);
         res as *mut Handle
     }
 
-    pub fn id(&self) -> uint { self.node.key }
+    pub fn id(&self) -> u64 { self.node.key }
     pub fn process<'a>(&self) -> &'a mut Process {
         unsafe { &mut *self.process }
     }
@@ -114,13 +114,13 @@ impl Handle {
         self.other = None;
     }
 
-    pub fn add_pulses(&mut self, pulses: uint) -> uint {
+    pub fn add_pulses(&mut self, pulses: u64) -> u64 {
         let res = self.pulses;
         self.pulses |= pulses;
         return res;
     }
 
-    pub fn pop_pulses(&mut self) -> uint {
+    pub fn pop_pulses(&mut self) -> u64 {
         let res = self.pulses;
         self.pulses = 0;
         return res;
@@ -128,13 +128,13 @@ impl Handle {
 }
 
 pub struct PendingPulse {
-    node : DictNode<uint, PendingPulse>,
+    node : DictNode<u64, PendingPulse>,
     handle : *mut Handle,
 }
 
 impl DictItem for PendingPulse {
-    type Key = uint;
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<uint, PendingPulse> {
+    type Key = u64;
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<u64, PendingPulse> {
         return &mut self.node;
     }
 }
@@ -149,37 +149,37 @@ impl PendingPulse {
 }
 
 pub struct Regs {
-    pub rax : uint,
-    pub rcx : uint,
-    pub rdx : uint,
-    pub rbx : uint,
-    pub rsp : uint,
-    pub rbp : uint,
-    pub rsi : uint,
-    pub rdi : uint,
+    pub rax : u64,
+    pub rcx : u64,
+    pub rdx : u64,
+    pub rbx : u64,
+    pub rsp : u64,
+    pub rbp : u64,
+    pub rsi : u64,
+    pub rdi : u64,
 
-    pub r8 : uint,
-    pub r9 : uint,
-    pub r10 : uint,
-    pub r11 : uint,
-    pub r12 : uint,
-    pub r13 : uint,
-    pub r14 : uint,
-    pub r15 : uint,
+    pub r8 : u64,
+    pub r9 : u64,
+    pub r10 : u64,
+    pub r11 : u64,
+    pub r12 : u64,
+    pub r13 : u64,
+    pub r14 : u64,
+    pub r15 : u64,
 }
 
 impl Regs {
 }
 
-type Flags = uint;
+type Flags = u8;
 
 pub struct Process {
     // Regs must be first since it's used by assembly code.
     regs : Regs,
-    pub rip : uint,
-    pub rflags : uint,
+    pub rip : u64,
+    pub rflags : u64,
     // Physical address of PML4 to put in CR3
-    pub cr3 : uint,
+    pub cr3 : u64,
     // Fields up until cr3 are shared with assembly code.
 
     // Bitwise OR of flags values
@@ -205,7 +205,7 @@ pub struct Process {
     // since we have to verify and match the GRANT to the correct page, we
     // simply don't save anything that might be wrong.
     // The lower bits are access flags for the fault/request.
-    pub fault_addr: uint,
+    pub fault_addr: u64,
 
     //fxsave : FXSaveRegs,
 }
@@ -267,7 +267,7 @@ impl Process {
     }
 
     #[inline(never)]
-    pub fn find_handle<'a>(&mut self, id : uint) -> Option<&'a mut Handle> {
+    pub fn find_handle<'a>(&mut self, id : u64) -> Option<&'a mut Handle> {
         let res = self.handles.find(id);
         match res {
             Some(ref h) if h.id() != id => None,
@@ -275,7 +275,7 @@ impl Process {
         }
     }
 
-    pub fn assoc_handles(&mut self, id: uint, other : &mut Process, other_id: uint) {
+    pub fn assoc_handles(&mut self, id: u64, other : &mut Process, other_id: u64) {
         let x = self.new_handle(id, other);
         let y = other.new_handle(other_id, self);
         x.other = Some(y as *mut Handle);
@@ -283,7 +283,7 @@ impl Process {
     }
 
     #[inline(never)]
-    pub fn new_handle<'a>(&mut self, id : uint, other : *mut Process) -> &'a mut Handle {
+    pub fn new_handle<'a>(&mut self, id : u64, other : *mut Process) -> &'a mut Handle {
         match self.handles.find(id) {
             Some(ref h) if h.id() != id => (),
             Some(h) => self.delete_handle(h),
@@ -298,7 +298,7 @@ impl Process {
         self.handles.remove(handle.node.key);
     }
 
-    pub fn rename_handle(&mut self, handle : &mut Handle, new_id: uint) {
+    pub fn rename_handle(&mut self, handle : &mut Handle, new_id: u64) {
         handle.node.key = new_id;
         // TODO self.handles.unlink/relink/key_changed
     }

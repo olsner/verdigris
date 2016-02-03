@@ -104,10 +104,10 @@ impl Info {
         self.flags & (flag as u32) != 0
     }
 
-    pub fn modules(&self, make_ptr : fn(uint) -> *const Module) -> &[Module] {
+    pub fn modules(&self, make_ptr : fn(u64) -> *const Module) -> &[Module] {
         unsafe { transmute(Slice {
-            data : make_ptr(self.mods_addr as uint),
-            len : self.mods_count as uint
+            data : make_ptr(self.mods_addr as u64),
+            len : self.mods_count as usize
         }) }
     }
 }
@@ -121,6 +121,7 @@ pub struct Module {
 }
 
 #[repr(packed)]
+#[derive(Clone, Copy)]
 pub struct MemoryMapItem {
     // Size of item (bytes), *not* including the item_size field
     pub item_size   : u32,
@@ -129,7 +130,6 @@ pub struct MemoryMapItem {
     // See values from MemoryTypes
     pub item_type   : u32,
 }
-impl Copy for MemoryMapItem {}
 
 pub enum MemoryTypes {
     MemoryTypeMemory = 1,

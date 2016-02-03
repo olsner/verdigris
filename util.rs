@@ -30,3 +30,21 @@ pub extern "C" fn rust_begin_unwind() -> ! {
 pub extern "C" fn rust_fail_bounds_check() -> ! {
     abort("rust_fail_bounds_check");
 }
+
+pub fn concat<U, T : Concat<U>>(h: T, l : T) -> U {
+    h.concat(l)
+}
+
+pub trait Concat<Full> {
+    fn concat(self, low : Self) -> Full;
+}
+impl Concat<u32> for u16 {
+    fn concat(self, l: u16) -> u32 {
+        ((self as u32) << 16) | (l as u32)
+    }
+}
+impl Concat<u64> for u32 {
+    fn concat(self, l: u32) -> u64 {
+        ((self as u64) << 32) | (l as u64)
+    }
+}

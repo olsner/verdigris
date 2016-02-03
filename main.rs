@@ -1,5 +1,4 @@
 #![feature(asm)]
-#![feature(int_uint)]
 #![feature(intrinsics)]
 #![feature(lang_items)]
 #![feature(no_std)]
@@ -60,23 +59,23 @@ fn writeMBInfo(info : &mboot::Info) {
     con::putc('\n');
 
     con::write("Flags: ");
-    con::writeHex(info.flags as uint);
+    con::writeHex(info.flags);
     con::newline();
 
     if info.has(mboot::MemorySize) {
-        con::writeUInt(info.mem_lower as uint);
+        con::writeUInt(info.mem_lower);
         con::write("kB lower memory, ");
-        con::writeUInt(info.mem_upper as uint);
+        con::writeUInt(info.mem_upper);
         con::write("kB upper memory, ");
-        con::writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024) as uint);
+        con::writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024));
         con::write("MB total.\n");
     }
     if info.has(mboot::CommandLine) {
-        let cmdline : *const u8 = PhysAddr(info.cmdline as uint);
+        let cmdline : *const u8 = PhysAddr(info.cmdline as u64);
         con::write("Command line @");
         con::writePtr(cmdline);
         con::write(" (");
-        con::writeHex(info.cmdline as uint);
+        con::writeHex(info.cmdline);
         con::write(") \"");
         con::writeCStr(cmdline);
         con::write("\"\n");
@@ -87,7 +86,7 @@ fn writeMBInfo(info : &mboot::Info) {
 pub fn generic_irq_handler(vec : u8) {
     if log_irq {
         write("IRQ! vec=");
-        con::writeUInt(vec as uint);
+        con::writeUInt(vec);
         con::newline();
     }
     // 32..47 are IRQ interrupts, 48 is APIC, others are unused.
@@ -96,7 +95,7 @@ pub fn generic_irq_handler(vec : u8) {
     }
 
     let c = cpu();
-    let mask = 1 << (vec as uint - 32);
+    let mask = 1 << (vec - 32);
     if c.irq_delayed & mask != 0 {
         write("IRQ: already delayed\n");
         return;
@@ -116,15 +115,15 @@ pub fn generic_irq_handler(vec : u8) {
     syscall::try_deliver_irq(p);
 }
 
-pub fn page_fault(p : &mut Process, error : uint) -> ! {
+pub fn page_fault(p : &mut Process, error : u64) -> ! {
     mod pf_errors {
-        #![allow(dead_code)]
         // Error code flags.
-        pub static PRESENT : uint = 1;
-        pub static WRITE : uint = 2;
-        pub static USER : uint = 4;
-        pub static RSVD : uint = 8;
-        pub static INSTR : uint = 16;
+        #![allow(dead_code)]
+        pub static PRESENT : u64 = 1;
+        pub static WRITE : u64 = 2;
+        pub static USER : u64 = 4;
+        pub static RSVD : u64 = 8;
+        pub static INSTR : u64 = 16;
     }
 
     if log_page_fault {
@@ -133,7 +132,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
         write(" cr2=");
         con::writePHex(x86::cr2());
         write(" rip=");
-        con::writePHex(p.rip as uint);
+        con::writePHex(p.rip);
         write(" in process ");
         con::writeMutPtr(p);
         con::newline();
@@ -144,7 +143,7 @@ pub fn page_fault(p : &mut Process, error : uint) -> ! {
     }
 
     let fault_addr = x86::cr2();
-    if (fault_addr as int) < 0 {
+    if (fault_addr as i64) < 0 {
         abort("fault with kernel-space addr");
     }
 
@@ -181,7 +180,7 @@ pub struct PerCpu {
     runqueue : DList<Process>,
 
     irq_process : Option<&'static mut Process>,
-    irq_delayed : uint,
+    irq_delayed : u64,
 }
 
 impl PerCpu {
@@ -202,7 +201,7 @@ impl PerCpu {
     }
 
     unsafe fn start(&mut self) {
-        setup_msrs(self.selfp as uint);
+        setup_msrs(self.selfp as u64);
     }
 
     fn queue(&mut self, p: &mut Process) {
@@ -239,7 +238,7 @@ impl PerCpu {
             write("switch_to ");
             con::writeMutPtr(p);
             write(" rip=");
-            con::writeHex(p.rip as uint);
+            con::writeHex(p.rip);
             if p.is(process::FastRet) {
                 write(" fastret");
             }
@@ -253,7 +252,7 @@ impl PerCpu {
         // TODO Check fpu_process, see if we need to set/reset TS bit in cr0
         x86::set_cr3(p.cr3);
         extern "C" {
-            fn fastret(p : &mut Process, rax : uint) -> !;
+            fn fastret(p : &mut Process, rax : u64) -> !;
             fn slowret(p : &mut Process) -> !;
         }
         if p.is(process::FastRet) {
@@ -265,7 +264,7 @@ impl PerCpu {
         }
     }
 
-    fn syscall_return(&mut self, p: &mut Process, rax : uint) -> ! {
+    fn syscall_return(&mut self, p: &mut Process, rax : u64) -> ! {
         p.regs().rax = rax;
         unsafe { self.switch_to(p); }
     }
@@ -305,18 +304,18 @@ impl PerCpu {
 pub fn cpu<'a>() -> &'a mut PerCpu {
     unsafe {
         let mut ret : *mut PerCpu;
-        asm!("movq %gs:($1), $0" : "=r"(ret) : "r"(0u));
+        asm!("movq %gs:($1), $0" : "=r"(ret) : "r"(0));
         return &mut *ret;
     }
 }
 
 #[lang="exchange_malloc"]
 #[inline(always)]
-pub fn xmalloc(size : uint, _align: uint) -> *mut u8 {
+pub fn xmalloc(size : usize, _align: usize) -> *mut u8 {
     malloc(size)
 }
 
-pub fn malloc(size : uint) -> *mut u8 {
+pub fn malloc(size : usize) -> *mut u8 {
     if size > 4096 {
         abort("oversized malloc");
     }
@@ -344,11 +343,11 @@ pub fn free<T>(p : *mut T) {
 
 #[lang="exchange_free"]
 #[inline(always)]
-pub fn xfree(p : *mut u8, _size: uint, _align: uint) {
+pub fn xfree(p : *mut u8, _size: usize, _align: usize) {
     free(p);
 }
 
-unsafe fn setup_msrs(gs : uint) {
+unsafe fn setup_msrs(gs : u64) {
     use x86::msr::*;
     use x86::rflags;
     use x86::efer;
@@ -359,9 +358,9 @@ unsafe fn setup_msrs(gs : uint) {
         fn syscall_entry_compat();
     }
 
-    wrmsr(STAR, (seg::user_code32_base << 16) | seg::code);
-    wrmsr(LSTAR, syscall_entry_stub as uint);
-    wrmsr(CSTAR, syscall_entry_compat as uint);
+    wrmsr(STAR, ((seg::user_code32_base as u64) << 16) | seg::code as u64);
+    wrmsr(LSTAR, syscall_entry_stub as u64);
+    wrmsr(CSTAR, syscall_entry_compat as u64);
     // FIXME: We want to clear a lot more flags - Direction for instance.
     // FreeBSD sets PSL_NT|PSL_T|PSL_I|PSL_C|PSL_D
     wrmsr(FMASK, rflags::IF | rflags::VM);
@@ -373,14 +372,14 @@ unsafe fn setup_msrs(gs : uint) {
 fn dummy() {}
 
 #[inline(never)]
-fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
-    let end = (end_unaligned + 0xfff) & !0xfff;
-    let start_page = start & !0xfff;
+fn new_proc_simple(start : u32, end_unaligned : u32) -> *mut Process {
+    let end = ((end_unaligned + 0xfff) & !0xfff) as u64;
+    let start_page = (start & !0xfff) as u64;
     let aspace : *mut AddressSpace = AddressSpace::new();
     let ret : *mut Process = Process::new(aspace);
     unsafe {
         (*ret).regs().rsp = 0x100000;
-        (*ret).rip = 0x100000 + (start & 0xfff);
+        (*ret).rip = 0x100000 + (start & 0xfff) as u64;
     }
 
     unsafe {
@@ -405,7 +404,7 @@ fn new_proc_simple(start : uint, end_unaligned : uint) -> *mut Process {
     return ret;
 }
 
-fn assoc_procs(p : &mut Process, i : uint, q : &mut Process, j : uint) {
+fn assoc_procs(p : &mut Process, i : u64, q : &mut Process, j : u64) {
     if log_assoc_procs {
         con::writeMutPtr(p);
         con::putc(':');
@@ -428,14 +427,14 @@ fn init_modules(cpu : &mut PerCpu) {
     let mut count = 0;
     for m in info.modules(start32::PhysAddr).iter() {
         write("Module ");
-        con::writeHex(m.start as uint);
+        con::writeHex(m.start);
         write("..");
-        con::writeHex(m.end as uint);
+        con::writeHex(m.end);
         write(": ");
-        con::writeCStr(start32::PhysAddr(m.string as uint));
+        con::writeCStr(start32::PhysAddr(m.string as u64));
         con::newline();
 
-        head.append(new_proc_simple(m.start as uint, m.end as uint));
+        head.append(new_proc_simple(m.start, m.end));
         count += 1;
     }
     con::writeUInt(count);

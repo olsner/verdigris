@@ -30,7 +30,6 @@ pub trait DListItem {
     // single copy of the linking code.
 }
 
-pub fn not_null<T : PtrExt>(p : T) -> bool { !p.is_null() }
 fn null<T>() -> *mut T { ptr::null_mut() }
 fn node<'a, T : DListItem>(p : *mut T) -> &'a mut DListNode<T> {
     unsafe { (*p).node() }
@@ -72,11 +71,11 @@ impl<T : DListItem> DList<T> {
         let next = node(item).next;
 
         node(item).prev = null();
-        if not_null(prev) {
+        if !prev.is_null() {
             node(prev).next = next;
         }
         node(item).next = null();
-        if not_null(next) {
+        if !next.is_null() {
             node(next).prev = prev;
         }
 

@@ -1,6 +1,6 @@
 use core::prelude::*;
-use core::iter::range_step;
-use core::intrinsics::write_bytes;
+use core::iter::range_step_inclusive;
+use core::intrinsics::{write_bytes, copy_nonoverlapping};
 use core::ptr;
 
 use con;
@@ -69,8 +69,8 @@ pub struct Global {
     garbage : FreeFrameS,
     // Frames that are all zeroes except for the first word
     free : FreeFrameS,
-    num_used : uint,
-    num_total : uint,
+    num_used : usize,
+    num_total : usize,
 }
 
 pub const empty_global : Global = Global { garbage : none, free : none, num_used : 0, num_total : 0 };
@@ -86,8 +86,8 @@ struct MemoryMap {
 }
 
 impl MemoryMap {
-    fn new(addr : *const u8, length : uint) -> MemoryMap {
-        return MemoryMap { addr : addr, end : unsafe { addr.offset(length as int) } }
+    fn new(addr : *const u8, length : usize) -> MemoryMap {
+        return MemoryMap { addr : addr, end : unsafe { addr.offset(length as isize) } }
     }
 }
 
@@ -97,7 +97,7 @@ impl Iterator for MemoryMap {
     fn next(&mut self) -> Option<MemoryMapItem> {
         if self.addr < self.end { unsafe {
             let item = *(self.addr as *const MemoryMapItem);
-            self.addr = self.addr.offset(4 + item.item_size as int);
+            self.addr = self.addr.offset(4 + item.item_size as isize);
             Some(item)
         } } else {
             None
@@ -110,31 +110,31 @@ fn clear<T>(page : *mut T) {
 }
 
 impl Global {
-    pub fn init(&mut self, info : &mboot::Info, min_addr : uint, max_addr : uint) {
+    pub fn init(&mut self, info : &mboot::Info, min_addr : u64, max_addr : u64) {
         if !info.has(mboot::MemoryMap) {
             return;
         }
 
-        let mmap = MemoryMap::new(PhysAddr(info.mmap_addr as uint), info.mmap_length as uint);
+        let mmap = MemoryMap::new(PhysAddr(info.mmap_addr as u64), info.mmap_length as usize);
         let mut count = 0;
         for item in mmap {
             if log_memory_map {
                 write("start=");
-                con::writePHex(item.start as uint);
+                con::writePHex(item.start);
                 write(" length=");
-                con::writePHex(item.length as uint);
+                con::writePHex(item.length);
                 write(" type=");
-                con::writeUInt(item.item_type as uint);
+                con::writeUInt(item.item_type);
                 con::newline();
             }
             if item.item_type != mboot::MemoryTypeMemory as u32 {
                 continue;
             }
-            for p in range_step(item.start, item.start + item.length, 4096) {
-                let addr = p as uint;
+            for p in range_step_inclusive(item.start, item.start + item.length, 4096) {
+                let addr = p as u64;
                 if min_addr <= addr && addr < max_addr {
                     self.num_used = 1;
-                    self.free_frame(MutPhysAddr(p as uint));
+                    self.free_frame(MutPhysAddr(addr));
                     count += 1;
                 }
             }
@@ -182,11 +182,11 @@ impl Global {
         res
     }
 
-    pub fn free_pages(&self) -> uint {
+    pub fn free_pages(&self) -> usize {
         self.num_total - self.num_used
     }
 
-    pub fn used_pages(&self) -> uint {
+    pub fn used_pages(&self) -> usize {
         self.num_used
     }
 
@@ -304,15 +304,11 @@ impl PerCpu {
     }
 }
 
-extern "rust-intrinsic" {
-    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T, count: uint);
-}
-
 pub fn heap_copy<T>(x : &T) -> *mut T {
     use alloc;
     unsafe {
         let res : *mut T = alloc();
-        copy_nonoverlapping_memory(res, x, 1);
+        copy_nonoverlapping(x, res, 1);
         return res;
     }
 }

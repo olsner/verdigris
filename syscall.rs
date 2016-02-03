@@ -1,6 +1,7 @@
 use core::prelude::*;
 
 use aspace::mapflag;
+use aspace::MapFlag;
 use con;
 use con::write;
 use cpu;
@@ -26,26 +27,26 @@ static log_pulse : bool = false;
 
 pub mod nr {
     #![allow(dead_code)]
-    pub const RECV : uint = 0;
-    pub const MAP : uint = 1;
-    pub const PFAULT : uint = 2;
-    pub const UNMAP : uint = 3;
-    pub const HMOD : uint = 4;
-    pub const NEWPROC : uint = 5;
-    pub const WRITE : uint = 6;
-    pub const PORTIO : uint = 7;
-    pub const GRANT : uint = 8;
-    pub const PULSE : uint = 9;
+    pub const RECV : u64 = 0;
+    pub const MAP : u64 = 1;
+    pub const PFAULT : u64 = 2;
+    pub const UNMAP : u64 = 3;
+    pub const HMOD : u64 = 4;
+    pub const NEWPROC : u64 = 5;
+    pub const WRITE : u64 = 6;
+    pub const PORTIO : u64 = 7;
+    pub const GRANT : u64 = 8;
+    pub const PULSE : u64 = 9;
 
-    pub const USER : uint = 16;
+    pub const USER : u64 = 16;
 
-    pub const MSG_MASK : uint = 0xff;
-    pub const MSG_KIND_MASK : uint = 0x300;
-    pub const MSG_KIND_SEND : uint = 0x000;
-    pub const MSG_KIND_CALL : uint = 0x100;
+    pub const MSG_MASK : u64 = 0xff;
+    pub const MSG_KIND_MASK : u64 = 0x300;
+    pub const MSG_KIND_SEND : u64 = 0x000;
+    pub const MSG_KIND_CALL : u64 = 0x100;
 
-    pub fn call(msg: uint) -> uint {
-        msg | MSG_KIND_CALL
+    pub fn call(msg: u8) -> u64 {
+        msg as u64 | MSG_KIND_CALL
     }
 }
 
@@ -54,13 +55,13 @@ pub mod nr {
 pub fn syscall(
     // Note weird ordering: syscall uses di,si,dx,8,9,10 but normal calls use
     // di,si,dx,cx,8,9. The stub puts r10 in rcx.
-    arg0: uint,
-    arg1: uint,
-    arg2: uint,
-    arg5: uint, // rcx = syscall r10
-    arg3: uint,
-    arg4: uint,
-    nr : uint, // saved_rax
+    arg0: u64,
+    arg1: u64,
+    arg2: u64,
+    arg5: u64, // rcx = syscall r10
+    arg3: u64,
+    arg4: u64,
+    nr : u64, // saved_rax
     // TODO: since arg5 is almost unused, swap with rax
 ) -> ! {
     use syscall::nr::*;
@@ -71,8 +72,8 @@ pub fn syscall(
 
     match nr {
     RECV => ipc_recv(p, arg0),
-    MAP => syscall_map(p, arg0, arg1, arg2, arg3, arg4),
-    PFAULT => syscall_pfault(p, arg1, arg2), // arg0 is always 0
+    MAP => syscall_map(p, arg0, arg1 as MapFlag, arg2, arg3, arg4),
+    PFAULT => syscall_pfault(p, arg1, arg2 as MapFlag), // arg0 is always 0
     // unmap
     HMOD => syscall_hmod(p, arg0, arg1, arg2),
     //newproc
@@ -80,8 +81,8 @@ pub fn syscall(
         con::putc(arg0 as u8 as char);
         syscall_return(p, 0);
     },
-    PORTIO => syscall_portio(p, arg0, arg1, arg2),
-    GRANT => syscall_grant(p, arg0, arg1, arg2),
+    PORTIO => syscall_portio(p, arg0 as u16, arg1 as u8, arg2 as u32),
+    GRANT => syscall_grant(p, arg0, arg1, arg2 as MapFlag),
     PULSE => syscall_pulse(p, arg0, arg1),
     _ if nr >= USER => {
         match nr & MSG_KIND_MASK {
@@ -110,8 +111,8 @@ pub fn syscall(
 }
 
 #[inline(never)]
-fn ipc_call(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
-    arg3: uint, arg4: uint, arg5: uint) {
+fn ipc_call(p : &mut Process, msg : u64, to : u64, arg1: u64, arg2: u64,
+    arg3: u64, arg4: u64, arg5: u64) {
     let log = log_ipc && to != 3;
     if log {
         con::writeMutPtr(p);
@@ -255,7 +256,7 @@ pub fn try_deliver_irq(p : &mut Process) {
     c.irq_delayed = irqs;
 }
 
-pub fn can_deliver_pulse(p : &mut Process, rcpt: uint) -> bool {
+pub fn can_deliver_pulse(p : &mut Process, rcpt: u64) -> bool {
     let rdi = p.regs().rdi;
     p.ipc_state() == process::InRecv.mask() &&
     // If it's a receive from (wrong) specific, we can't deliver now.
@@ -263,7 +264,7 @@ pub fn can_deliver_pulse(p : &mut Process, rcpt: uint) -> bool {
     (rdi == rcpt || !p.find_handle(rdi).is_some())
 }
 
-fn deliver_pulse(p: &mut Process, rcpt: uint, pulses: uint) -> ! {
+fn deliver_pulse(p: &mut Process, rcpt: u64, pulses: u64) -> ! {
     p.regs().rdi = rcpt;
     p.regs().rsi = pulses;
     // See comment in transfer_message about special ipc-return
@@ -272,8 +273,8 @@ fn deliver_pulse(p: &mut Process, rcpt: uint, pulses: uint) -> ! {
     syscall_return(p, nr::PULSE);
 }
 
-fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
-        arg1: uint, arg2: uint, arg3: uint, arg4: uint, arg5: uint) {
+fn send_or_block(sender : &mut Process, h : &mut Handle, msg: u64,
+        arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     // Save regs - either we'll copy these in transfer_message or we'll
     // need to store them until later on when the transfer can finish.
     // FIXME: The instant transfer_message path should be able to avoid this.
@@ -315,8 +316,8 @@ fn send_or_block(sender : &mut Process, h : &mut Handle, msg: uint,
 }
 
 #[inline(never)]
-fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
-        arg3: uint, arg4: uint, arg5: uint) {
+fn ipc_send(p : &mut Process, msg : u64, to : u64, arg1: u64, arg2: u64,
+        arg3: u64, arg4: u64, arg5: u64) {
     if log_ipc && to != 3 {
         con::writeMutPtr(p);
         write(" ipc_send to ");
@@ -333,14 +334,14 @@ fn ipc_send(p : &mut Process, msg : uint, to : uint, arg1: uint, arg2: uint,
         send_or_block(p, h, msg, arg1, arg2, arg3, arg4, arg5);
     },
     None => {
-        p.dump();
+        // p.dump();
         abort("ipc_send: no recipient")
     }
     }
 }
 
 #[inline(never)]
-fn ipc_recv(p : &mut Process, from : uint) {
+fn ipc_recv(p : &mut Process, from : u64) {
     let mut handle = None;
     if from != 0 {
         handle = p.find_handle(from);
@@ -382,7 +383,7 @@ fn recv(p: &mut Process, handle: &mut Handle) {
     }
 }
 
-fn recv_from_any(p : &mut Process, _id: uint) {
+fn recv_from_any(p : &mut Process, _id: u64) {
     let mut sender = None;
     for waiter in p.waiters.iter() {
         if waiter.is(process::InSend) {
@@ -420,7 +421,7 @@ fn recv_from_any(p : &mut Process, _id: uint) {
 }
 
 #[inline(never)]
-fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
+fn syscall_pulse(p: &mut Process, handle: u64, pulses: u64) -> ! {
     if log_pulse {
         con::writeMutPtr(p);
         write(" send pulse ");
@@ -457,7 +458,7 @@ fn syscall_pulse(p: &mut Process, handle: uint, pulses: uint) -> ! {
 }
 
 #[inline(never)]
-fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut offset: uint, size: uint) {
+fn syscall_map(p: &mut Process, handle: u64, mut prot: MapFlag, addr: u64, mut offset: u64, size: u64) {
     prot &= mapflag::UserAllowed;
     // TODO Check (and return failure) on:
     // * unaligned addr, offset, size (must be page-aligned)
@@ -467,7 +468,7 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
                 prot = 0;
                 addr
             },
-            Some(p) => p as uint - kernel_base,
+            Some(p) => p as u64 - kernel_base,
         }
     }
 
@@ -485,7 +486,7 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
         con::newline();
     }
 
-    p.aspace().map_range(addr, addr + size, handle, (offset - addr) | prot);
+    p.aspace().map_range(addr, addr + size, handle, (offset - addr) | (prot as u64));
 
     if (prot & mapflag::Phys) == 0 {
         offset = 0;
@@ -494,7 +495,7 @@ fn syscall_map(p: &mut Process, handle: uint, mut prot: uint, addr: uint, mut of
 }
 
 #[inline(never)]
-fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
+fn syscall_pfault(p : &mut Process, mut vaddr: u64, access: MapFlag) {
     vaddr &= !0xfff;
 
     // set fault address
@@ -519,11 +520,11 @@ fn syscall_pfault(p : &mut Process, mut vaddr: uint, access: uint) {
     }
 
     // Now do the equivalent of sendrcv with rdi=handle, rsi=offset, rdx=flags
-    ipc_call(p, nr::call(nr::PFAULT), card.handle, offset, prot, 0, 0, 0);
+    ipc_call(p, nr::PFAULT, card.handle, offset, prot as u64, 0, 0, 0);
 }
 
 #[inline(never)]
-fn syscall_grant(p: &mut Process, id: uint, mut vaddr: uint, mut prot: uint) {
+fn syscall_grant(p: &mut Process, id: u64, mut vaddr: u64, mut prot: MapFlag) {
     vaddr &= !0xfff;
     prot &= mapflag::RWX;
 
@@ -581,14 +582,14 @@ fn syscall_grant(p: &mut Process, id: uint, mut vaddr: uint, mut prot: uint) {
     if other_proc.is(process::InRecv) {
         // Explicit pfault, do a send to respond (rather than a resume-from-
         // interrupt as would otherwise be required).
-        ipc_send(p, nr::GRANT, id, other_proc.fault_addr, prot, 0, 0, 0);
+        ipc_send(p, nr::GRANT, id, other_proc.fault_addr, prot as u64, 0, 0, 0);
     } else {
         abort("non-explicit fault");
     }
 }
 
 #[inline(never)]
-fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
+fn syscall_hmod(p : &mut Process, id: u64, rename: u64, copy: u64) {
     let handle = p.find_handle(id);
     if log_hmod {
         con::writeMutPtr(p);
@@ -615,7 +616,7 @@ fn syscall_hmod(p : &mut Process, id: uint, rename: uint, copy: uint) {
 }
 
 #[inline(never)]
-fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
+fn syscall_portio(p : &mut Process, port : u16, op : u8, data: u32) -> ! {
     if log_portio {
         con::writeMutPtr(p);
         write(" portio: port="); con::writeHex(port & 0xffff);
@@ -624,7 +625,7 @@ fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
             write(" write "); con::writeHex(data);
         }
     }
-    let mut res : uint = 0;
+    let mut res : u32 = 0;
     unsafe { match op {
     0x01 => asm!("inb %dx, %al" : "={al}"(res) : "{dx}"(port)),
     0x02 => asm!("inw %dx, %ax" : "={ax}"(res) : "{dx}"(port)),
@@ -640,10 +641,10 @@ fn syscall_portio(p : &mut Process, port : uint, op : uint, data: uint) -> ! {
         }
         con::newline();
     }
-    syscall_return(p, res);
+    syscall_return(p, res as u64);
 }
 
 #[inline(never)]
-fn syscall_return(p : &mut Process, res : uint) -> ! {
+fn syscall_return(p : &mut Process, res : u64) -> ! {
     cpu().syscall_return(p, res);
 }

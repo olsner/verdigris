@@ -1,24 +1,28 @@
 use core::prelude::*;
 use core::cmp::min;
+use core::iter::range_inclusive;
 
 // NOTE: We cheat here - we know the memcpy in runtime.s copies from the
 // beginning so we use this on overlapping ranges too.
 // (To avoid having to implement memmove.)
-extern "rust-intrinsic" {
-    fn copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T, count: uint);
-}
-
 #[inline]
-unsafe fn copy_memory<T>(dst: *mut T, src: *const T, count: uint) {
-    copy_nonoverlapping_memory(dst, src, count);
+unsafe fn copy_memory<T>(dst: *mut T, src: *const T, count: usize) {
+    use core::intrinsics::copy_nonoverlapping;
+    copy_nonoverlapping(src, dst, count);
 }
 
 pub fn debugc(c : char) {
     unsafe { asm!("outb %al,$$0xe9": :"{al}"(c as u8) :: "volatile"); }
 }
 
-unsafe fn memset16(dst : *mut u16, v : u16, count : uint) {
+unsafe fn memset16(dst : *mut u16, v : u16, count : usize) {
     asm!("rep stosw" : : "{rdi}"(dst), "{ax}"(v), "{rcx}"(count) : "rdi", "rcx", "memory");
+}
+
+macro_rules! range {
+    ($start:expr, $end:expr) => {
+        range_inclusive($start, $end - 1)
+    }
 }
 
 pub trait Writer {
@@ -30,41 +34,41 @@ pub trait Writer {
 
     #[inline(never)]
     fn write(&mut self, string : &str) {
-        for i in range(0, string.len()) {
+        for i in range!(0, string.len()) {
             self.putc(string.as_bytes()[i] as char);
         }
     }
 
-    fn writeInt(&mut self, x : int) {
+    fn writeInt(&mut self, x : isize) {
         self.writeSigned(0, false, x);
     }
 
-    fn writeUInt(&mut self, x : uint) {
+    fn writeUInt(&mut self, x : usize) {
         self.writeUnsigned(0, false, 10, false, x);
     }
 
-    fn writeHex(&mut self, x : uint) {
+    fn writeHex(&mut self, x : usize) {
         self.writeUnsigned(0, false, 16, true, x);
     }
 
     fn writePtr<T>(&mut self, x : *const T) {
-        self.writePHex(x as uint);
+        self.writePHex(x as usize);
     }
     fn writeMutPtr<T>(&mut self, x : *mut T) {
-        self.writePHex(x as uint);
+        self.writePHex(x as usize);
     }
     #[inline(never)]
-    fn writePHex(&mut self, x : uint) {
+    fn writePHex(&mut self, x : usize) {
         self.writeUnsigned(16, true, 16, true, x);
     }
 
     #[cfg(no_console)]
-    fn writeUnsigned(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint) {
+    fn writeUnsigned(&mut self, width : usize, leading_zero : bool, base : usize, show_base : bool, num : usize) {
         // nothing
     }
 
     #[cfg(not(no_console))]
-    fn writeUnsigned(&mut self, width : uint, leading_zero : bool, base : uint, show_base : bool, num : uint)
+    fn writeUnsigned(&mut self, width : usize, leading_zero : bool, base : usize, show_base : bool, num : usize)
     {
         if show_base && base == 16 {
             self.write("0x");
@@ -81,7 +85,7 @@ pub trait Writer {
         }
         if width > 0 {
             let c = if leading_zero { '0' } else { ' ' };
-            for _ in range(0, min(width - len, width)) {
+            for _ in range!(0, min(width - len, width)) {
                 self.putc(c);
             }
         }
@@ -91,13 +95,13 @@ pub trait Writer {
         }
     }
 
-    fn writeSigned(&mut self, width : uint, leading_zero : bool, num : int) {
+    fn writeSigned(&mut self, width : usize, leading_zero : bool, num : isize) {
         let abs = if num < 0 {
             self.putc('-');
             -num
         } else {
             num
-        } as uint;
+        } as usize;
         self.writeUnsigned(width, leading_zero, 10, false, abs);
     }
 
@@ -125,7 +129,7 @@ static mut con : Console = Console { buffer : 0 as *mut u16, position : 0, color
 
 pub struct Console {
     buffer : *mut u16,
-    position : uint,
+    position : usize,
     pub color : u16,
     pub debug : bool,
 }
@@ -152,21 +156,21 @@ impl Console {
         }
     }
 
-    pub fn putchar(&self, position : uint, c : u16) {
+    pub fn putchar(&self, position : usize, c : u16) {
         unsafe {
-            *self.buffer.offset(position as int) = c;
+            *self.buffer.offset(position as isize) = c;
         }
     }
 
     pub fn clear(&mut self) {
-        for i in range(0, 80*24 as uint) {
+        for i in range!(0, 80*24) {
             self.putchar(i, 0);
         }
         self.position = 0;
     }
 
-    fn width(&self) -> uint { 80 }
-    fn height(&self) -> uint { 24 }
+    fn width(&self) -> usize { 80 }
+    fn height(&self) -> usize { 24 }
 
     fn clear_eol(&mut self) {
         let count = self.width() - (self.position % self.width());
@@ -175,17 +179,17 @@ impl Console {
     }
 
     #[inline(always)]
-    pub fn clear_range(&self, start : uint, length : uint) {
+    pub fn clear_range(&self, start : usize, length : usize) {
         unsafe {
-            memset16(self.buffer.offset(start as int), self.color, length);
+            memset16(self.buffer.offset(start as isize), self.color, length);
         }
     }
 
     #[inline(always)]
-    fn copy_back(&mut self, to : uint, from : uint, n : uint) {
+    fn copy_back(&mut self, to : usize, from : usize, n : usize) {
         unsafe {
             let b = self.buffer;
-            copy_memory(b.offset(to as int), b.offset(from as int) as *const u16, n);
+            copy_memory(b.offset(to as isize), b.offset(from as isize) as *const u16, n);
         }
     }
 
@@ -234,10 +238,53 @@ pub fn putc(c : char) { get().putc(c); }
 #[inline(never)]
 pub fn write(string : &str) { get().write(string); }
 pub fn writeCStr(c_str : *const u8) { get().writeCStr(c_str); }
-pub fn writeHex(x : uint) { get().writeHex(x); }
-pub fn writeInt(x : int) { get().writeInt(x); }
-pub fn writePHex(x : uint) { get().writePHex(x); }
+pub fn writeHex<T : Unsigned>(x : T) { x.writeHex(); }
+pub fn writeInt<T : Signed>(x : T) { x.writeInt(); }
+pub fn writePHex<T : Unsigned>(x : T) { x.writePHex(); }
 pub fn writePtr<T>(x : *const T) { get().writePtr(x); }
 pub fn writeMutPtr<T>(x : *mut T) { get().writeMutPtr(x); }
 #[inline(never)]
-pub fn writeUInt(x : uint) { get().writeUInt(x); }
+pub fn writeUInt<T : Unsigned>(x : T) { x.writeUInt(); }
+
+pub trait Unsigned {
+    fn writeHex(self);
+    fn writePHex(self);
+    fn writeUInt(self);
+}
+pub trait Signed {
+    fn writeInt(self);
+}
+impl Unsigned for usize {
+    fn writeHex(self) { get().writeHex(self); }
+    fn writePHex(self) { get().writePHex(self); }
+    fn writeUInt(self) { get().writeUInt(self); }
+}
+impl Signed for isize {
+    fn writeInt(self) { get().writeInt(self); }
+}
+macro_rules! unsigned {
+    ($up:ident, $( $x:ident ),* ) => {
+        $(
+        impl Unsigned for $x {
+            fn writeHex(self) { (self as $up).writeHex(); }
+            fn writePHex(self) { (self as $up).writePHex(); }
+            fn writeUInt(self) { (self as $up).writeUInt(); }
+        }
+        )*
+    };
+}
+macro_rules! signed {
+    ($up:ident, $( $x:ident ),* ) => {
+        $(
+        impl Signed for $x {
+            fn writeInt(self) { (self as $up).writeInt(); }
+        }
+        )*
+    };
+}
+unsigned!(usize, u64, u32, u16, u8);
+unsigned!(usize, i64, i32, i16, i8);
+unsigned!(usize, isize);
+signed!(isize, i64, i32, i16, i8);
+signed!(isize, u64, u32, u16, u8);
+signed!(isize, usize);

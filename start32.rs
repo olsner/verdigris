@@ -12,41 +12,40 @@ extern {
 }
 
 #[allow(unsigned_negation)]
-pub static kernel_base : uint = -(1u << 30) as uint;
+pub static kernel_base : u64 = -(1i64 << 30) as u64;
 
 pub fn HighAddr<T>(obj : &T) -> &T {
-    PhysAddrRef(obj as *const T as uint)
+    PhysAddrRef(obj as *const T as u64)
 }
 
-pub fn MutPhysAddr<T>(addr : uint) -> *mut T {
+pub fn MutPhysAddr<T>(addr : u64) -> *mut T {
     (addr + kernel_base) as *mut T
 }
 
-pub fn PhysAddr<T>(addr: uint) -> *const T {
+pub fn PhysAddr<T>(addr: u64) -> *const T {
     (addr + kernel_base) as *const T
 }
 
-pub fn PhysAddrRef<'a, T>(addr : uint) -> &'a T {
+pub fn PhysAddrRef<'a, T>(addr : u64) -> &'a T {
     unsafe { &*PhysAddr(addr) }
 }
 
 pub fn MultiBootInfo() -> &'static mboot::Info {
-    PhysAddrRef(*HighAddr(&mbi_pointer) as uint)
+    PhysAddrRef(*HighAddr(&mbi_pointer) as u64)
 }
 
-pub fn MemoryStart() -> uint {
-    *HighAddr(&memory_start) as uint
+pub fn MemoryStart() -> u64 {
+    *HighAddr(&memory_start) as u64
 }
 
 // End of (physical) memory usable is fixed by kernel_base. More memory and we
 // wrap around to null.
-#[allow(unsigned_negation)]
-pub fn MemoryEnd() -> uint {
-    -kernel_base
+pub fn MemoryEnd() -> u64 {
+    -(kernel_base as i64) as u64
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {
-    PhysAddrRef(&gdtr as *const x86::Gdtr as uint)
+    PhysAddrRef(&gdtr as *const x86::Gdtr as u64)
 }
 
 //pub fn OrigMultiBootInfo() -> *mboot::Info {

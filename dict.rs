@@ -8,15 +8,12 @@ pub struct Dict<V> {
     root : *mut V,
 }
 
-impl<V> Copy for Dict<V> {}
-
+#[derive(Clone, Copy)]
 pub struct DictNode<K, V> {
     pub key : K,
     left : *mut V,
     right : *mut V,
 }
-
-impl<K: Copy, V> Copy for DictNode<K, V> {}
 
 impl<K,V> DictNode<K,V> {
     pub fn new(key : K) -> DictNode<K, V> {
@@ -29,7 +26,7 @@ impl<K,V> DictNode<K,V> {
 }
 
 pub trait DictItem {
-    type Key = uint;
+    type Key = u64;
 
     fn node<'a>(&'a mut self) -> &'a mut DictNode<Self::Key, Self>;
     // Figure out a way to implement a node->item function, then we can remove
