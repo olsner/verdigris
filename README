@@ -1,4 +1,4 @@
-Last tested with rust nightly 2015-02-24.
+Last tested with rust nightly 2015-04-04.
 
 Build by running make. RUST_PREFIX can be set to the path of your rust install.
 The default value of RUST_PREFIX is "rust-nightly" - you can make that a
