@@ -5,20 +5,15 @@ SHELL = /bin/bash
 OUT ?= out
 GRUBDIR ?= $(OUT)/grub
 
-# RUST_PREFIX must be set pointing to the prefix where a nice nightly is
-# installed. This was tested with:
-#  rustc 1.0.0-nightly (2b01a37ec 2015-02-21) (built 2015-02-22).
-# Default: make a symlink rust-nightly in the project root, pointing to Rust.
-RUST_PREFIX ?= rust-nightly
-RUSTC := $(RUST_PREFIX)/bin/rustc
-export LD_LIBRARY_PATH=$(RUST_PREFIX)/lib
-CLANG ?= clang-3.6
-CC = $(CLANG)
-LLVM = -3.6
+RUSTC ?= $(shell which rustc)
+RUST_PREFIX := $(HOME)/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/
+LLVM = -9
 LLVM_LINK = llvm-link$(LLVM)
 OPT = opt$(LLVM)
 LLVM_DIS = llvm-dis$(LLVM)
 LLVM_AS = llvm-as$(LLVM)
+CLANG ?= clang$(LLVM)
+CC = $(CLANG)
 AS = $(CLANG) -c
 YASM ?= yasm
 ZPIPE = $(OUT)/zpipe
@@ -66,7 +61,8 @@ KERNEL_OBJS = $(addprefix $(OUT)/, runtime.o syscall.o amalgam.o)
 
 KERNEL_OBJS += start32.o
 
-CORE_CRATE := libcore-4e7c5e5c.rlib
+RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
+CORE_CRATE := $(notdir $(wildcard $(RUST_LIBDIR)/libcore-*.rlib))
 
 $(OUT)/kernel.elf: linker.ld $(KERNEL_OBJS)
 	$(HUSH_LD) $(LD) $(LDFLAGS) --oformat=elf64-x86-64 -o $@ -T $^ -Map $(@:.elf=.map)
@@ -120,11 +116,14 @@ all: $(OUT)/amalgam.ll
 $(ZPIPE): zpipe.c
 	$(HUSH_CC) $(CC) -lz -o $@ $<
 
-RUST_LIBDIR = $(RUST_PREFIX)/lib/rustlib/x86_64-unknown-linux-gnu/lib
+# FIXME The rust .bc.z header is now variable length so I guess we need a (simple but still) actual parser for it.
 $(OUT)/rust-core/core.bc: $(RUST_LIBDIR)/$(CORE_CRATE) $(ZPIPE)
 	@mkdir -p $(@D)
-	ar p $< $(CORE_CRATE:lib%.rlib=%).0.bytecode.deflate | tail -c +24 | $(ZPIPE) > $@.tmp
-	mv $@.tmp $@
+	@rm -f $(@D)/*.tmp.bc
+	n=0; for bc in `ar t $< | grep '\.bc\.z'`; do \
+		ar p $< $$bc | tee $(@D)/$$bc | tail -c +47 | $(ZPIPE) >$(@D)/$$bc.tmp.bc; \
+	done
+	$(LLVM_LINK) -o $@ $(@D)/*.tmp.bc
 
 $(OUT)/rust-core/$(CORE_CRATE): $(RUST_LIBDIR)/$(CORE_CRATE)
 	@mkdir -p $(@D)
