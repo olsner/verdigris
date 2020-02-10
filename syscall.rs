@@ -1,5 +1,3 @@
-use core::prelude::*;
-
 use aspace::mapflag;
 use aspace::MapFlag;
 use con;

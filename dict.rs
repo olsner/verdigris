@@ -1,4 +1,3 @@
-use core::prelude::*;
 use core::ptr;
 use core::marker::PhantomData;
 
@@ -26,9 +25,9 @@ impl<K,V> DictNode<K,V> {
 }
 
 pub trait DictItem {
-    type Key = u64;
+    type Key;
 
-    fn node<'a>(&'a mut self) -> &'a mut DictNode<Self::Key, Self>;
+    fn node<'a>(&'a mut self) -> &'a mut DictNode<Self::Key, Self> where Self: core::marker::Sized;
     // Figure out a way to implement a node->item function, then we can remove
     // "T" from the nodes, do links between nodes instead of items, and use a
     // single copy of the linking code.
@@ -53,7 +52,7 @@ impl<V : DictItem> Dict<V> where V::Key: Ord + Copy {
     #[inline(never)]
     fn find_<'a>(&self, key : V::Key) -> Option<&'a mut V> {
         let mut item = self.root;
-        let mut max = null();
+        let mut max : *mut V = null();
         while !item.is_null() {
             let ikey : V::Key = node(item).key;
             if ikey <= key {
@@ -134,9 +133,7 @@ impl<V : DictItem> Dict<V> where V::Key: Ord + Copy {
     }
 }
 
-// I would much rather allow unused item here, but it seems to be an *error*?
-// WTF...
-struct DictIter<'a, T : 'a> {
+pub struct DictIter<'a, T : 'a> {
     p : *mut T,
     phantomdata : PhantomData<&'a T>
 }

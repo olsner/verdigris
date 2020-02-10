@@ -1,5 +1,3 @@
-use core::prelude::*;
-
 #[repr(C, packed)]
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -8,7 +6,7 @@ pub struct Gdtr {
     base : u64,
 }
 pub unsafe fn lgdt(gdtr : &Gdtr) {
-    asm!("lgdt $0" :: "*m" (*gdtr));
+    asm!("lgdt $0" :: "*m" (gdtr));
 }
 pub unsafe fn ltr(tr : u16) {
     asm!("ltr %ax" :: "{ax}"(tr));
@@ -36,9 +34,6 @@ pub mod seg {
 }
 
 pub mod idt {
-
-use core::prelude::*;
-use core::iter::range_inclusive;
 
 use x86::seg;
 use util::concat;
@@ -69,7 +64,7 @@ pub struct Idtr {
 }
 
 pub unsafe fn lidt(idtr : &Idtr) {
-    asm!("lidt $0" :: "*m" (*idtr));
+    asm!("lidt $0" :: "*m" (idtr));
 }
 pub fn limit(_table : &[Entry; 49]) -> u16 {
     return 49 * 16 - 1;
@@ -115,7 +110,7 @@ pub unsafe fn init() {
     static mut idt_table : [Entry; 49] = [null_entry; 49];
     idt_table[7] = entry(handler_NM_stub as *const u8);
     idt_table[14] = entry(handler_PF_stub as *const u8);
-    for i in range_inclusive(32, 48) {
+    for i in 32..48 {
         idt_table[i] = entry((&irq_handlers[i - 32]) as *const u32 as *const u8);
     }
     load(&idt_table);

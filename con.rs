@@ -1,6 +1,4 @@
-use core::prelude::*;
 use core::cmp::min;
-use core::iter::range_inclusive;
 
 // NOTE: We cheat here - we know the memcpy in runtime.s copies from the
 // beginning so we use this on overlapping ranges too.
@@ -19,12 +17,6 @@ unsafe fn memset16(dst : *mut u16, v : u16, count : usize) {
     asm!("rep stosw" : : "{rdi}"(dst), "{ax}"(v), "{rcx}"(count) : "rdi", "rcx", "memory");
 }
 
-macro_rules! range {
-    ($start:expr, $end:expr) => {
-        range_inclusive($start, $end - 1)
-    }
-}
-
 pub trait Writer {
     fn putc(&mut self, c : char);
 
@@ -34,8 +26,8 @@ pub trait Writer {
 
     #[inline(never)]
     fn write(&mut self, string : &str) {
-        for i in range!(0, string.len()) {
-            self.putc(string.as_bytes()[i] as char);
+        for b in string.as_bytes() {
+            self.putc(*b as char);
         }
     }
 
@@ -85,7 +77,7 @@ pub trait Writer {
         }
         if width > 0 {
             let c = if leading_zero { '0' } else { ' ' };
-            for _ in range!(0, min(width - len, width)) {
+            for _ in 0..min(width - len, width) {
                 self.putc(c);
             }
         }
@@ -163,7 +155,7 @@ impl Console {
     }
 
     pub fn clear(&mut self) {
-        for i in range!(0, 80*24) {
+        for i in 0..(80*24) {
             self.putchar(i, 0);
         }
         self.position = 0;

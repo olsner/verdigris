@@ -1,7 +1,4 @@
-use core::raw::Slice;
-use core::mem::transmute;
-use core::prelude::*;
-
+use core::slice;
 pub use self::MemoryTypes::*;
 pub use self::InfoFlags::*;
 
@@ -105,10 +102,7 @@ impl Info {
     }
 
     pub fn modules(&self, make_ptr : fn(u64) -> *const Module) -> &[Module] {
-        unsafe { transmute(Slice {
-            data : make_ptr(self.mods_addr as u64),
-            len : self.mods_count as usize
-        }) }
+        unsafe { slice::from_raw_parts(make_ptr(self.mods_addr as u64), self.mods_count as usize) }
     }
 }
 

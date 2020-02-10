@@ -1,5 +1,3 @@
-use core::prelude::*;
-
 use alloc;
 
 use con;
@@ -374,7 +372,6 @@ impl AddressSpace {
 
     pub fn find_add_backing<'a>(&mut self, vaddr : u64) -> &'a Backing {
         use aspace::mapflag::*;
-        use util::abort;
 
         match self.backings.find_const(vaddr | 0xfff) {
             Some(ref back) if back.has_vaddr(vaddr) => { return &**back; },
@@ -406,7 +403,8 @@ impl AddressSpace {
 
     pub fn share_backing<'a>(&mut self, vaddr: u64) -> &'a mut Sharing {
         let back = self.find_add_backing(vaddr);
-        self.sharings.insert(Sharing::new(self, back))
+        let s = Sharing::new(self, back);
+        self.sharings.insert(s)
     }
 
     pub fn add_pte(&mut self, vaddr : u64, pte : u64) {

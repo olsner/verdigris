@@ -1,4 +1,3 @@
-use core::prelude::*;
 use core::ptr;
 use core::marker::PhantomData;
 
@@ -24,7 +23,7 @@ impl<T> DListNode<T> {
 }
 
 pub trait DListItem {
-    fn node<'a>(&'a mut self) -> &'a mut DListNode<Self>;
+    fn node<'a>(&'a mut self) -> &'a mut DListNode<Self> where Self: core::marker::Sized;
     // Figure out a way to implement a node->item function, then we can remove
     // "T" from the nodes, do links between nodes instead of items, and use a
     // single copy of the linking code.
@@ -96,7 +95,7 @@ impl<T : DListItem> DList<T> {
     }
 }
 
-struct DListIter<'a, T : 'a> {
+pub struct DListIter<'a, T : 'a> {
     p : *mut T,
     phantomdata : PhantomData<&'a T>
 }

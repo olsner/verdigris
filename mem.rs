@@ -1,5 +1,3 @@
-use core::prelude::*;
-use core::iter::range_step_inclusive;
 use core::intrinsics::{write_bytes, copy_nonoverlapping};
 use core::ptr;
 
@@ -22,9 +20,7 @@ static log_memtest : bool = false;
 static mem_stats : bool = true;
 
 pub mod framestack {
-    use core::prelude::*;
-
-    struct FreeFrame {
+    pub struct FreeFrame {
         next : FreeFrameS
     }
     pub type FreeFrameS = *mut FreeFrame;
@@ -130,13 +126,15 @@ impl Global {
             if item.item_type != mboot::MemoryTypeMemory as u32 {
                 continue;
             }
-            for p in range_step_inclusive(item.start, item.start + item.length, 4096) {
+            let mut p = item.start;
+            while p <= item.start + item.length {
                 let addr = p as u64;
                 if min_addr <= addr && addr < max_addr {
                     self.num_used = 1;
                     self.free_frame(MutPhysAddr(addr));
                     count += 1;
                 }
+                p += 4096;
             }
         }
         self.num_used = 0;

@@ -11,7 +11,6 @@ extern {
     static kernel_pdp : [u64; 512];
 }
 
-#[allow(unsigned_negation)]
 pub static kernel_base : u64 = -(1i64 << 30) as u64;
 
 pub fn HighAddr<T>(obj : &T) -> &T {
@@ -31,11 +30,11 @@ pub fn PhysAddrRef<'a, T>(addr : u64) -> &'a T {
 }
 
 pub fn MultiBootInfo() -> &'static mboot::Info {
-    PhysAddrRef(*HighAddr(&mbi_pointer) as u64)
+    unsafe { PhysAddrRef(*HighAddr(&mbi_pointer) as u64) }
 }
 
 pub fn MemoryStart() -> u64 {
-    *HighAddr(&memory_start) as u64
+    unsafe { *HighAddr(&memory_start) as u64 }
 }
 
 // End of (physical) memory usable is fixed by kernel_base. More memory and we
@@ -45,7 +44,7 @@ pub fn MemoryEnd() -> u64 {
 }
 
 pub fn Gdtr() -> &'static x86::Gdtr {
-    PhysAddrRef(&gdtr as *const x86::Gdtr as u64)
+    unsafe { PhysAddrRef(&gdtr as *const x86::Gdtr as u64) }
 }
 
 //pub fn OrigMultiBootInfo() -> *mboot::Info {
@@ -57,5 +56,5 @@ pub fn CleanPageMappings() {
 }
 
 pub fn kernel_pdp_addr() -> u64 {
-    return &kernel_pdp as *const [u64; 512] as u64;
+    unsafe { &kernel_pdp as *const [u64; 512] as u64 }
 }

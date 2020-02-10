@@ -1,8 +1,6 @@
 #![feature(asm)]
 #![feature(intrinsics)]
 #![feature(lang_items)]
-#![feature(no_std)]
-#![feature(core)]
 
 #![allow(improper_ctypes)]
 #![allow(non_snake_case)]
@@ -10,9 +8,6 @@
 
 #![no_std]
 
-extern crate core;
-
-use core::prelude::*;
 use core::mem::transmute;
 use core::mem::size_of;
 
@@ -20,8 +15,6 @@ use aspace::AddressSpace;
 use con::write;
 use dlist::DList;
 use process::Process;
-use start32::MultiBootInfo;
-//use start32::OrigMultiBootInfo;
 use start32::PhysAddr;
 use start32::MutPhysAddr;
 use util::abort;
@@ -67,7 +60,7 @@ fn writeMBInfo(info : &mboot::Info) {
         con::write("kB lower memory, ");
         con::writeUInt(info.mem_upper);
         con::write("kB upper memory, ");
-        con::writeUInt(((info.mem_lower + info.mem_upper + 1023) / 1024));
+        con::writeUInt((info.mem_lower + info.mem_upper + 1023) / 1024);
         con::write("MB total.\n");
     }
     if info.has(mboot::CommandLine) {
@@ -271,7 +264,7 @@ impl PerCpu {
 
     fn get_process<'a>(&'a mut self) -> Option<&'a mut Process> {
         match self.process {
-            Some(ref p) => Some(unsafe { &mut *(*p as *mut Process) }),
+            Some(ref mut p) => Some(unsafe { &mut *(*p as *mut Process) }),
             None => None,
         }
     }
@@ -285,15 +278,15 @@ impl PerCpu {
 
     fn irq_process<'a>(&'a mut self) -> Option<&'a mut Process> {
         match self.irq_process {
-            Some(ref p) => Some(unsafe { &mut *(*p as *mut Process) }),
+            Some(ref mut p) => Some(unsafe { &mut *(*p as *mut Process) }),
             None => None,
         }
     }
 
-    fn is_irq_process(&self, p: &mut Process) -> bool {
+    fn is_irq_process(&mut self, p: &mut Process) -> bool {
         match self.irq_process {
         None => false,
-        Some(ref q) => (p as *mut Process) == (*q as *mut Process),
+        Some(ref mut q) => (p as *mut Process) == (*q as *mut Process),
         }
     }
 }
@@ -341,7 +334,7 @@ pub fn free<T>(p : *mut T) {
     }
 }
 
-#[lang="exchange_free"]
+#[lang="box_free"]
 #[inline(always)]
 pub fn xfree(p : *mut u8, _size: usize, _align: usize) {
     free(p);
