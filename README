@@ -1,10 +1,9 @@
-Last tested with rust nightly 2015-04-04.
+Last built with rust 1.43.0-nightly 2020-02-09, but not successfully tested. It
+does start up but doesn't find the multiboot information with the memory map so
+it gets OOM immediately.
 
-Build by running make. RUST_PREFIX can be set to the path of your rust install.
-The default value of RUST_PREFIX is "rust-nightly" - you can make that a
-symlink to wherever you have the appropriate nightly unpacked.
-With recent nightlies, the symlink should point to the rustc/ subdirectory. The
-nightly does *not* have to be installed, just unpacked.
+Build by running `make`. `RUST_PREFIX` can be overridden to the path of your
+rust install, but will default to pointing inside `$HOME/.rustup`.
 
 To run with user-space programs, check out https://github.com/olsner/os, copy
 out/kernel into os/out/grub/ (after building verdigris) and build the os/ repo.

@@ -19,19 +19,27 @@ YASM ?= yasm
 ZPIPE = $(OUT)/zpipe
 
 TARGET = x86_64-unknown-linux-gnu
+
+# Used for compiling .bc to assembly code
 CFLAGS = -g -std=c99 -Oz -ffunction-sections -fdata-sections
 CFLAGS += --target=$(TARGET) -mcmodel=kernel -mno-red-zone -mno-sse -mno-mmx
 CFLAGS += -ffreestanding $(COPTFLAGS)
+
+# Optimization flags for clang compinling .bc to assembly
 COPTFLAGS = -fno-unroll-loops -freroll-loops -funit-at-a-time
 COPTFLAGS += -mllvm -exhaustive-register-search
+
 LDFLAGS = --check-sections --gc-sections
+
 PUBLIC_SYMBOLS = start64,syscall,irq_entry
+
+# Optimization flags for bitcode optimization pass
 OPTFLAGS = -Oz -function-sections -data-sections
-OPTFLAGS += -std-link-opts
 OPTFLAGS += -internalize-public-api-list=$(PUBLIC_SYMBOLS) -internalize
 OPTFLAGS += -argpromotion -mergefunc -deadargelim
+
+# Flags when compiling rust code
 RUSTCFLAGS = -g -O --target $(TARGET) --out-dir $(OUT)
-RUSTLIBS = -L.
 
 CP = @cp
 ifeq ($(VERBOSE),YES)
@@ -73,8 +81,8 @@ $(OUT)/kernel: $(OUT)/kernel.elf
 
 -include $(OUT)/syscall.d
 
-$(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE) Makefile
-	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=llvm-bc,dep-info $(RUSTLIBS) $<
+$(OUT)/main.bc: main.rs $(OUT)/rust-core/$(CORE_CRATE)
+	$(HUSH_RUST) $(RUSTC) $(RUSTCFLAGS) $(if $(CFG),--cfg $(CFG)) --crate-type=lib --emit=llvm-bc,dep-info $<
 
 -include $(OUT)/main.d
 
@@ -90,8 +98,11 @@ $(OUT)/amalgam.bc: $(OUT)/main.bc $(OUT)/rust-core/core.bc
 # magic.
 $(OUT)/%.s: $(OUT)/%.bc Makefile
 	$(HUSH_LLC) $(CLANG) $(CFLAGS) -S -o $@ $<
-# Hack to remove 16-byte alignment for every function.
-	@sed -i 's/.align\s\+16/.align 1/g' $@
+# Hack: to remove 16-byte alignment for every function.
+	@sed -i '/.p2align/d' $@
+# Hack: to remove dynamic linking support
+	@sed -i 's/*\?\(\w\+\)@GOTPCREL(%rip)/\1/g' $@
+# Who needs binutils or finding the right compiler flags when you have sed?
 
 $(OUT)/%.o: %.s
 	@mkdir -p $(@D)
